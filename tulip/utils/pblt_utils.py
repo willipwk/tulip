@@ -6,11 +6,11 @@ import pybullet as p
 PBLT_TIMESTEP = 1 / 240.0
 
 
-def init_pblt_sim(**kwargs) -> int:
+def init_sim(**kwargs) -> int:
     """Initialise a PyBullet simulation client.
 
     Args:
-        kwargs: Simulation setting such as connection mode in kwargs.
+        kwargs: PyBullet simulation setting in flexible kwargs input.
     Returns:
         physics client id"""
     mode = kwargs.get("mode", "GUI").upper()

@@ -2,7 +2,7 @@ import ipdb
 import numpy as np
 import pybullet as p
 from tulip.robots.franka_panda_pyblt import FrankaPanda
-from tulip.utils.pblt_utils import init_pblt_sim, step_sim
+from tulip.utils.pblt_utils import init_sim, step_sim
 
 
 class TestFrankaPandaPblt:
@@ -14,6 +14,6 @@ class TestFrankaPandaPblt:
 
 
 if __name__ == "__main__":
-    sim_cid = init_pblt_sim()
+    sim_cid = init_sim()
     urdf_file = "/Users/zyuwei/Projects/tulip/data/urdf/franka_panda/panda.urdf"
     tester = TestFrankaPandaPblt(sim_cid=sim_cid, urdf_file=urdf_file)
