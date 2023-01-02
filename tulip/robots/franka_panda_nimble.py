@@ -4,11 +4,10 @@ import logging
 import os
 from typing import Tuple
 
+import nimblephysics as n
 import numpy as np
-import pybullet as p
 from tulip.robots.base_robot import BaseRobot
 from tulip.utils.constants import FRANKA_URDF_FILE
-from tulip.utils.pblt_utils import enable_torque_sensor, step_sim
 
 
 class FrankaPanda(BaseRobot):
@@ -16,14 +15,14 @@ class FrankaPanda(BaseRobot):
 
     def __init__(
         self,
-        sim_cid: int,
+        world: n.simulation.World,
         urdf_file: str = FRANKA_URDF_FILE,
         home_pos: np.ndarray = np.array(
             [0, -0.785, 0, -2.356, 0, 1.57, 0.785, 0.04, 0.04]
         ),
         base_pos: np.ndarray = np.array([0.0, 0.0, 0.0]),
         base_orn: np.ndarray = np.array([0.0, 0.0, 0.0, 1.0]),
-        ee_idx: int = -1,
+        # ee_idx: int = -1,
     ):
         super().__init__()
 
@@ -32,51 +31,28 @@ class FrankaPanda(BaseRobot):
         self._home_pos = home_pos
         self._base_pos = base_pos
         self._base_orn = base_orn
-        self._ee_idx = ee_idx
-        self._sim_cid = sim_cid
+        self.world = world
+        self.robot = self.world.loadSkeleton(os.path.abspath(self._urdf_file))
 
-        self._pid = p.loadURDF(
-            fileName=self._urdf_file,
-            basePosition=self._base_pos,
-            baseOrientation=self._base_orn,
-            useFixedBase=True,  # to update with mobile base
-            physicsClientId=self._sim_cid,
-        )
-
-        self._num_joints = p.getNumJoints(
-            bodyUniqueId=self.id,
-            physicsClientId=self._sim_cid,
-        )
-        self.link_names = ()
+        self._num_joints = self.robot.getNumDofs()
+        self._joint_handlers = self.robot.getDofs()
+        # self.link_names = ()
         self.joint_names = ()
         self.joint_limits = ()
         self.joint_force_limits = ()  # not in used
         self.joint_velocity_limits = ()  # not in used
         self.controllable_joint_indices = ()
-        for joint_idx in range(self._num_joints):
-            joint_info = p.getJointInfo(
-                bodyUniqueId=self.id,
-                jointIndex=joint_idx,
-                physicsClientId=self._sim_cid,
-            )
-            self.link_names += (joint_info[12],)
-            self.joint_names += (joint_info[1],)
-            # todo(zyuwei) check if it's fine to only keep controllable limits
-            if joint_info[2] in [0, 1]:  # JOINT_REVOLUTE=0, JOINT_PRISMATIC=1
-                self.joint_limits += ((joint_info[8], joint_info[9]),)
-                self.joint_force_limits += (joint_info[10],)
-                self.joint_velocity_limits += (joint_info[11],)
-                self.controllable_joint_indices += (joint_idx,)
-
-        enable_torque_sensor(self.id, self.controllable_joint_indices, sim_cid)
+        self._joint_handles = self.robot.getDofs()
+        for joint_idx, handler in enumerate(self._joint_handlers):
+            # self.link_names += (joint_info[12],)
+            self.joint_names += (handler.getName(),)
+            self.joint_limits += (handler.getPositionLimits(),)
+            self.joint_force_limits += (handler.getControlForceLimits(),)
+            self.joint_velocity_limits += (handler.getVelocityLimits(),)
+            self.controllable_joint_indices += (handler.getIndexInSkeleton(),)
 
         logging.info("Setting robot to home position:", self._home_pos)
         self.set_joint_positions(self._home_pos)
-        step_sim(50)
-
-    @property
-    def id(self) -> int:
-        return self._pid
 
     @property
     def num_joints(self) -> int:
@@ -134,36 +110,26 @@ class FrankaPanda(BaseRobot):
 
         Returns:
             A fixed-length array of current joint positions."""
-        joint_states = p.getJointStates(
-            bodyUniqueId=self.id,
-            jointIndices=self.controllable_joint_indices,
-            physicsClientId=self._sim_cid,
-        )
-        joint_pos = np.array([js[0] for js in joint_states])
-        return joint_pos
+        joint_pos = [handler.getPosition() for handler in self._joint_handlers]
+        return np.array(joint_pos)
 
     def get_joint_velocities(self) -> np.ndarray:
         """Retrieve the current joint velocities.
 
         Returns:
             A fixed-length array of current joint velocities."""
-        joint_states = p.getJointStates(
-            bodyUniqueId=self.id,
-            jointIndices=self.controllable_joint_indices,
-            physicsClientId=self._sim_cid,
-        )
-        joint_vel = np.array([js[1] for js in joint_states])
-        return joint_vel
+        joint_vel = [handler.getVelocity() for handler in self._joint_handlers]
+        return np.array(joint_vel)
 
     def get_joint_accelerations(self) -> np.ndarray:
         """Retrieve the current joint accelerations.
 
         Returns:
             A fixed-length array of current joint accelerations."""
-        raise NotImplementedError(
-            "PyBullet doesn't support direct acceleration query. You may \
-            consider to calculate via (v_(t) - v_(t-1)) / dt."
-        )
+        joint_acc = [
+            handler.getAcceleration() for handler in self._joint_handlers
+        ]
+        return np.array(joint_acc)
 
     # todo(zyuwei) parsing the dof for force/torque values
     def get_joint_torques(self) -> np.ndarray:
@@ -171,13 +137,7 @@ class FrankaPanda(BaseRobot):
 
         Returns:
             A fixed-length array of current joint torques."""
-        joint_states = p.getJointStates(
-            bodyUniqueId=self.id,
-            jointIndices=self.controllable_joint_indices,
-            physicsClientId=self._sim_cid,
-        )
-        joint_torques = np.array([js[2] for js in joint_states])
-        return joint_torques
+        raise NotImplementedError("Method is not defined!")
 
     def get_joint_limits(self) -> Tuple[Tuple[float, float]]:
         """Retrieve the joint limits as per the URDF.
@@ -221,8 +181,6 @@ class FrankaPanda(BaseRobot):
     def set_joint_positions(
         self,
         q: np.ndarray,
-        position_gain: float = 0.03,
-        velocity_gain: float = 1.0,
     ) -> None:
         """Control joints to the target positions
 
@@ -233,13 +191,11 @@ class FrankaPanda(BaseRobot):
         assert q.size == len(
             self.controllable_joint_indices
         ), "Input size does not match with the number of controllable joints"
-        p.setJointMotorControlArray(
-            bodyUniqueId=self.id,
-            jointIndices=self.controllable_joint_indices,
-            controlMode=p.POSITION_CONTROL,
-            targetPositions=q,
-            forces=len(self.controllable_joint_indices) * [240.0],
-        )
+        joint_pos = self.robot.getPositions()
+        for q_idx, q in enumerate(q):
+            joint_idx = self.controllable_joint_indices[q_idx]
+            joint_pos[joint_idx] = q
+        self.robot.setPositions(joint_pos)
         return
 
     def set_delta_joint_positions(self, d_q: np.ndarray) -> None:
