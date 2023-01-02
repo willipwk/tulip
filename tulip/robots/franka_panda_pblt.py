@@ -1,4 +1,4 @@
-"""A base meta class for robot manipulator."""
+"""Franka Panda interface for PyBullet."""
 
 import logging
 import os
@@ -7,7 +7,6 @@ from typing import Tuple
 import numpy as np
 import pybullet as p
 from tulip.robots.base_robot import BaseRobot
-from tulip.utils.constants import FRANKA_URDF_FILE
 from tulip.utils.pblt_utils import enable_torque_sensor, step_sim
 
 
@@ -17,7 +16,7 @@ class FrankaPanda(BaseRobot):
     def __init__(
         self,
         sim_cid: int,
-        urdf_file: str = FRANKA_URDF_FILE,
+        urdf_file: str,
         home_pos: np.ndarray = np.array(
             [0, -0.785, 0, -2.356, 0, 1.57, 0.785, 0.04, 0.04]
         ),
