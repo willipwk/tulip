@@ -1,6 +1,7 @@
 """A base meta class for robot manipulator."""
 
 from abc import ABC
+from typing import Tuple
 
 import numpy as np
 
@@ -9,7 +10,7 @@ class BaseRobot(ABC):
     """Meta class for robot manipulator."""
 
     @property
-    def ee_pose(self) -> tuple[np.ndarray, np.ndarray]:
+    def ee_pose(self) -> Tuple[np.ndarray, np.ndarray]:
         """End effector Cartesian pose.
 
         Returns:
@@ -48,7 +49,7 @@ class BaseRobot(ABC):
             A fixed-length array of current joint torques."""
         raise NotImplementedError("Method is not defined!")
 
-    def get_ee_pose(self) -> tuple[np.ndarray, np.ndarray]:
+    def get_ee_pose(self) -> Tuple[np.ndarray, np.ndarray]:
         """Retrieve the current end effector pose.
 
         Returns:
@@ -83,14 +84,14 @@ class BaseRobot(ABC):
             A fixed-length array of current joint torques."""
         raise NotImplementedError("Method is not defined!")
 
-    def get_joint_limits(self) -> tuple[tuple[float, float]]:
+    def get_joint_limits(self) -> Tuple[Tuple[float, float]]:
         """Retrieve the joint limits as per the URDF.
 
         Returns:
             A tuple of joint limit tuples as (lower_limit, upper_limit)."""
         raise NotImplementedError("Method is not defined!")
 
-    def fk(self, q: np.ndarray) -> tuple[np.ndarray]:
+    def fk(self, q: np.ndarray) -> Tuple[np.ndarray]:
         """Forward kinematics given input joint positions.
 
         Args:

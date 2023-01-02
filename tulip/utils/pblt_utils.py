@@ -1,5 +1,6 @@
 """A collection of utility functions for PyBullet simulation."""
 import time
+from typing import List
 
 import pybullet as p
 
@@ -67,7 +68,7 @@ def step_sim(
 
 def enable_torque_sensor(
     robot_id: int,
-    joint_indices: list[int],
+    joint_indices: List[int],
     sim_cid: int,
 ) -> None:
     """Enable force/torque sensor on target joint(s).
@@ -88,7 +89,7 @@ def enable_torque_sensor(
 
 def disable_torque_sensor(
     robot_id: int,
-    joint_indices: list[int],
+    joint_indices: List[int],
     sim_cid: int,
 ) -> None:
     """Disable force/torque sensor on target joint(s).

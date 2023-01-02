@@ -1,6 +1,7 @@
 """A base meta class for robot manipulator."""
 
 import os
+from typing import Tuple
 
 import numpy as np
 import pybullet as p
@@ -80,7 +81,7 @@ class FrankaPanda(BaseRobot):
         return self._num_joints
 
     @property
-    def ee_pose(self) -> tuple[np.ndarray, np.ndarray]:
+    def ee_pose(self) -> Tuple[np.ndarray, np.ndarray]:
         """End effector Cartesian pose.
 
         Returns:
@@ -119,7 +120,7 @@ class FrankaPanda(BaseRobot):
             A fixed-length array of current joint torques."""
         return self.get_joint_torques()
 
-    def get_ee_pose(self) -> tuple[np.ndarray, np.ndarray]:
+    def get_ee_pose(self) -> Tuple[np.ndarray, np.ndarray]:
         """Retrieve the current end effector pose.
 
         Returns:
@@ -176,14 +177,14 @@ class FrankaPanda(BaseRobot):
         joint_torques = np.array([js[2] for js in joint_states])
         return joint_torques
 
-    def get_joint_limits(self) -> tuple[tuple[float, float]]:
+    def get_joint_limits(self) -> Tuple[Tuple[float, float]]:
         """Retrieve the joint limits as per the URDF.
 
         Returns:
             A tuple of joint limit tuples as (lower_limit, upper_limit)."""
         return self.joint_limits
 
-    def fk(self, q: np.ndarray) -> tuple[np.ndarray]:
+    def fk(self, q: np.ndarray) -> Tuple[np.ndarray]:
         """Forward kinematics given input joint positions.
 
         Args:
