@@ -40,13 +40,13 @@ if __name__ == "__main__":
         basePosition=[0, 0, 0.1],
         baseOrientation=p.getQuaternionFromEuler([np.pi / 2, 0, 0]),
         useFixedBase=True,
-        globalScaling=0.5,
+        globalScaling=3,
         physicsClientId=sim_cid,
     )
 
     # visualize tie vertices
-    # v_pos = get_vertices_pos(duck_id, sim_cid)
-    # vis_points(v_pos, sim_cid, color=[0, 1, 0])
+    v_pos = get_vertices_pos(duck_id, sim_cid)
+    vis_points(v_pos, sim_cid, color=[0, 1, 0])
 
     # extrinsic related
     camera_pos = [-0.58451435, -0.09919992, 0.61609813]

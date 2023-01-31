@@ -285,6 +285,7 @@ def render(
     return rgb, depth, seg
 
 
+# TODO(zyuwei) [BUG] it does not handle with baselink offset currently
 def get_vertices_pos(
     obj_id: int,
     sim_cid: int,
@@ -301,6 +302,10 @@ def get_vertices_pos(
     Returns:
         A list of vertices position in world coordinate.
     """
+    print(
+        "[Warning]: The vertices query dos not handle and will be inaccurate \
+        when baselink is offset to the origin point in the urdf."
+    )
     obj_pos, obj_quat = p.getBasePositionAndOrientation(obj_id, sim_cid)
     if v_local_pos is None:
         obj_vs_data = p.getVisualShapeData(obj_id, sim_cid)
