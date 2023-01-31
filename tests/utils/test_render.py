@@ -52,9 +52,9 @@ if __name__ == "__main__":
     mode = "GUI"
     sim_cid = init_sim(mode=mode)
     p.loadURDF(
-        f"{pybullet_data.getDataPath()}/plane.urdf",
-        physicsClientId=sim_cid,
+        f"{pybullet_data.getDataPath()}/plane.urdf", physicsClientId=sim_cid
     )
+    """
     p.loadURDF(
         "tie.urdf",
         basePosition=[0, 0, 0.05],
@@ -62,6 +62,7 @@ if __name__ == "__main__":
         useFixedBase=True,
         physicsClientId=sim_cid,
     )
+    """
     p.loadURDF(
         f"{pybullet_data.getDataPath()}/duck_vhacd.urdf",
         basePosition=[0, 0, 0.1],
@@ -95,8 +96,8 @@ if __name__ == "__main__":
     cx = 954.0125249569526
     cy = 542.8760188199577
     # two render parameters that does not exist in a real camera
-    far = 0.01
-    near = 100
+    far = 10
+    near = 0.01
     proj_matrix = build_projection_matrix(
         width, height, fx, fy, cx, cy, near, far
     )
@@ -105,17 +106,11 @@ if __name__ == "__main__":
     # for view_matrix in [gl_view_matrix, pblt_view_matrix]:
     for view_matrix in [pblt_view_matrix]:
         rgb, depth, seg = render(
-            width,
-            height,
-            view_matrix,
-            proj_matrix,
-            near,
-            far,
-            sim_cid,
+            width, height, view_matrix, proj_matrix, near, far, sim_cid
         )
         vis_rgb(rgb, 255)
-        # vis_depth(depth)
-        # vis_seg_indices(seg)
+        vis_depth(depth)
+        vis_seg_indices(seg)
 
         xyz_image, pcd = depth2xyz(
             depth, fx, fy, cx, cy, camera_pos, camera_quat
