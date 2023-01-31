@@ -3,74 +3,50 @@ import time
 import numpy as np
 import pybullet as p
 import pybullet_data
-from scipy.spatial.transform import Rotation as R
 from tulip.utils.gl_utils import build_projection_matrix, build_view_matrix
-from tulip.utils.image_utils import vis_depth, vis_rgb, vis_seg_indices
+from tulip.utils.image_utils import (
+    depth2xyz,
+    pcd2xyz,
+    vis_depth,
+    vis_rgb,
+    vis_seg_indices,
+)
 from tulip.utils.pblt_utils import (
     build_view_matrix_pblt,
+    get_vertices_pos,
     init_sim,
     render,
     vis_frame,
     vis_points,
 )
-from tulip.utils.transform_utils import pos_quat2pose_matrix
-
-
-def depth2xyz(depth, fx, fy, cx, cy, cam_pos, cam_quat):
-    print("==> Converting depth to xyz")
-    cam_pose = pos_quat2pose_matrix(cam_pos, cam_quat)
-    h, w = depth.shape
-    pcd = []
-    xyz_image = np.zeros((depth.shape[0], depth.shape[1], 3), np.float32)
-    for h_i in range(h):
-        for w_i in range(w):
-            z = depth[h_i, w_i]
-            pos_vec = np.array([(w_i - cx) * z / fx, (h_i - cy) * z / fy, z, 1])
-            xyz_image[h_i, w_i] = np.matmul(cam_pose, pos_vec.transpose())[:3]
-            pcd.append(xyz_image[h_i, w_i])
-
-    return xyz_image, pcd
-
-
-def pcd2xyz(pcd, width, height, fx, fy, cx, cy, cam_pos, cam_quat):
-    print("==> Converting pcd to xyz image")
-    cam_pose = pos_quat2pose_matrix(cam_pos, cam_quat)
-    cam_extrinsic = np.linalg.inv(cam_pose)
-    xyz_image = np.zeros((height, width, 3), np.float32)
-    for point in pcd:
-        pos_vec = np.array([point[0], point[1], point[2], 1])
-        uvz_vec = np.matmul(cam_extrinsic, pos_vec.transpose())[:3]
-        z = uvz_vec[2]
-        w_i = int(uvz_vec[0] * fx / z + cx)
-        h_i = int(uvz_vec[1] * fy / z + cy)
-        xyz_image[h_i, w_i] = pos_vec[:3]
-    return xyz_image
-
+from tulip.utils.transform_utils import homogeneous_transform
 
 if __name__ == "__main__":
-    # initialize simulation
     mode = "GUI"
     sim_cid = init_sim(mode=mode)
+    p.resetSimulation(p.RESET_USE_DEFORMABLE_WORLD, physicsClientId=sim_cid)
     p.loadURDF(
         f"{pybullet_data.getDataPath()}/plane.urdf", physicsClientId=sim_cid
     )
-    """
-    p.loadURDF(
-        "tie.urdf",
-        basePosition=[0, 0, 0.05],
-        baseOrientation=p.getQuaternionFromEuler([np.pi / 2, 0, 0]),
-        useFixedBase=True,
-        physicsClientId=sim_cid,
-    )
-    """
-    p.loadURDF(
+    # tie_id = p.loadURDF(
+    #    "tie.urdf",
+    #    basePosition=[0, 0, 0.05],
+    #    baseOrientation=p.getQuaternionFromEuler([np.pi / 2, 0, 0]),
+    #    useFixedBase=True,
+    #    physicsClientId=sim_cid,
+    # )
+    duck_id = p.loadURDF(
         f"{pybullet_data.getDataPath()}/duck_vhacd.urdf",
         basePosition=[0, 0, 0.1],
         baseOrientation=p.getQuaternionFromEuler([np.pi / 2, 0, 0]),
         useFixedBase=True,
-        globalScaling=3,
+        globalScaling=0.5,
         physicsClientId=sim_cid,
     )
+
+    # visualize tie vertices
+    # v_pos = get_vertices_pos(duck_id, sim_cid)
+    # vis_points(v_pos, sim_cid, color=[0, 1, 0])
 
     # extrinsic related
     camera_pos = [-0.58451435, -0.09919992, 0.61609813]
@@ -112,8 +88,8 @@ if __name__ == "__main__":
         vis_depth(depth)
         vis_seg_indices(seg)
 
-        xyz_image, pcd = depth2xyz(
-            depth, fx, fy, cx, cy, camera_pos, camera_quat
+        pcd = depth2xyz(
+            depth, fx, fy, cx, cy, camera_pos, camera_quat, return_pcd=True
         )
         vis_points(pcd, sim_cid)
 
@@ -121,5 +97,4 @@ if __name__ == "__main__":
             pcd, width, height, fx, fy, cx, cy, camera_pos, camera_quat
         )
         vis_depth(xyz_image[:, :, 2])
-        time.sleep(5)
         input("enter to continue")

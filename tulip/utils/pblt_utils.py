@@ -4,7 +4,7 @@ from typing import List, Tuple
 
 import numpy as np
 import pybullet as p
-from tulip.utils.gl_utils import zbuffer_to_depth
+from tulip.utils.gl_utils import read_vertices, zbuffer_to_depth
 from tulip.utils.transform_utils import (
     homogeneous_transform,
     pos_quat2pose_matrix,
@@ -171,8 +171,22 @@ def vis_frame(
 
 
 def vis_points(
-    points, sim_cid, sample_size=5000, duration=1, color=[1, 0, 0]
+    points: np.ndarray,
+    sim_cid: int,
+    sample_size: int = 5000,
+    duration: float = 1,
+    color: list = [1, 0, 0],
 ) -> None:
+    """Visualize a list/array of points xyz in space.
+
+    Args:
+        points: input list of points to visualize.
+        sim_cid: PyBullet physics simulation id.
+        sample_size: number of points to downsample to if exceeds the number.
+        duration: visualization time in second.
+        color: rgb color in range [0, 1].
+    """
+    sample_size = min(sample_size, len(points))
     scale = int(len(points) / sample_size)
     vis_points = [points[i * scale] for i in range(sample_size)]
     colors = [color for i in range(sample_size)]
@@ -269,3 +283,36 @@ def render(
     # segmentation indices postprocessing
     seg = seg.reshape([height, width])
     return rgb, depth, seg
+
+
+def get_vertices_pos(
+    obj_id: int,
+    sim_cid: int,
+    v_local_pos: np.ndarray = None,
+    scale: list = np.array([1, 1, 1]),
+) -> list:
+    """Query the current vertices position.
+
+    Args:
+        obj_id: PyBullet object id.
+        sim_cid: PyBullet Physics client id.
+        v_local_pos: vertices local position in the objec coordinate.
+        scale: object load scale in x, y, z
+    Returns:
+        A list of vertices position in world coordinate.
+    """
+    obj_pos, obj_quat = p.getBasePositionAndOrientation(obj_id, sim_cid)
+    if v_local_pos is None:
+        obj_vs_data = p.getVisualShapeData(obj_id, sim_cid)
+        assert len(obj_vs_data) == 1, "Does not support muti-body urdf yet"
+        obj_fn = obj_vs_data[0][4].decode("utf-8")
+        scale = np.array(obj_vs_data[0][3])
+        v_local_pos = read_vertices(obj_fn)
+    v_pos = []
+    for pos in v_local_pos:
+        v_pos.append(
+            homogeneous_transform(obj_pos, obj_quat, pos * scale, [0, 0, 0, 1])[
+                0
+            ]
+        )
+    return v_pos

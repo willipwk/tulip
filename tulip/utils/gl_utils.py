@@ -2,6 +2,21 @@ import numpy as np
 from tulip.utils.transform_utils import pos_quat2pose_matrix
 
 
+# TODO(zyuwei) io_utils?
+def read_vertices(obj_fn):
+    vertices = []
+    with open(obj_fn, "r") as fp:
+        lines = [line.strip().split() for line in fp.readlines()]
+    for line in lines:
+        if line[0] == "v":
+            vertices.append(
+                np.array(
+                    [float(line[1]), float(line[2]), float(line[3])], np.float32
+                )
+            )
+    return np.array(vertices)
+
+
 def build_projection_matrix(
     width: float,
     height: float,
