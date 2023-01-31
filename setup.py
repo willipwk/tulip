@@ -2,15 +2,10 @@ from distutils.core import setup
 
 from setuptools import find_packages
 
-dependencies = [
-    "numpy",
-    "pybullet",
-    "git+https://github.com/haosulab/MPlib.git",
-]
+dependencies = ["numpy", "pybullet", "scipy"]
 
-dev_tools = [
-    "ipdb",
-]
+dev_tools = ["ipdb"]
+
 
 setup(
     name="tulip",
@@ -22,7 +17,5 @@ setup(
     url="https://www.python.org/sigs/distutils-sig/",
     packages=find_packages("."),
     install_requires=dependencies,
-    extras_require={
-        "dev": dev_tools,
-    },
+    extras_require={"dev": dev_tools},
 )
