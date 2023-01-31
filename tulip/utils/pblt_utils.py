@@ -1,8 +1,14 @@
 """A collection of utility functions for PyBullet simulation."""
 import time
-from typing import List
+from typing import List, Tuple
 
+import numpy as np
 import pybullet as p
+from tulip.utils.gl_utils import zbuffer_to_depth
+from tulip.utils.transform_utils import (
+    homogeneous_transform,
+    pos_quat2pose_matrix,
+)
 
 PBLT_TIMESTEP = 1 / 240.0
 
@@ -47,6 +53,14 @@ def init_sim(**kwargs) -> int:
     p.setGravity(0, 0, gravity_coef)
 
     return sim_cid
+
+
+def use_pybullet_data() -> None:
+    """Extend data searching path to use pybullet_data."""
+    import pybullet_data
+
+    p.setAdditionalSearchPath(pybullet_data.getDataPath())
+    return
 
 
 def step_sim(
@@ -106,3 +120,152 @@ def disable_torque_sensor(
             physicsClientId=sim_cid,
         )
     return
+
+
+def vis_frame(
+    pos: np.ndarray,
+    quat: np.ndarray,
+    sim_cid: int,
+    length: float = 1,
+    duration: float = 10,
+) -> None:
+    """Visualize target pose frame.
+
+    Args:
+        pos: frame position.
+        quat: frame orientation.
+        length: visualization axis length.
+        duration: visualization duration.
+        sim_cid: PyBullet physicsClientId."""
+    x_axis_end_pos, _ = homogeneous_transform(
+        pos, quat, [1, 0, 0], [0, 0, 0, 1]
+    )
+    y_axis_end_pos, _ = homogeneous_transform(
+        pos, quat, [0, 1, 0], [0, 0, 0, 1]
+    )
+    z_axis_end_pos, _ = homogeneous_transform(
+        pos, quat, [0, 0, 1], [0, 0, 0, 1]
+    )
+    p.addUserDebugLine(
+        pos,
+        x_axis_end_pos,
+        lineColorRGB=[1, 0, 0],
+        lifeTime=duration,
+        lineWidth=length,
+    )
+    p.addUserDebugLine(
+        pos,
+        y_axis_end_pos,
+        lineColorRGB=[0, 1, 0],
+        lifeTime=duration,
+        lineWidth=length,
+    )
+    p.addUserDebugLine(
+        pos,
+        z_axis_end_pos,
+        lineColorRGB=[0, 0, 1],
+        lifeTime=duration,
+        lineWidth=length,
+    )
+    return
+
+
+def vis_points(
+    points, sim_cid, sample_size=5000, duration=1, color=[1, 0, 0]
+) -> None:
+    scale = int(len(points) / sample_size)
+    vis_points = [points[i * scale] for i in range(sample_size)]
+    colors = [color for i in range(sample_size)]
+    p.addUserDebugPoints(
+        vis_points,
+        pointColorsRGB=colors,
+        lifeTime=duration,
+        physicsClientId=sim_cid,
+    )
+
+
+def build_view_matrix_pblt(
+    camera_pos: np.ndarray,
+    camera_quat: np.ndarray,
+    sim_cid: int,
+    vis: bool = False,
+) -> np.ndarray:
+    """Call PyBullet corresponding function to calculate view matrix.
+
+    Args:
+        camera_pos: camera position.
+        camera_quat: camera orientation.
+        sim_cid: PyBullet physicsClientId.
+        vis: to visualize the lookat_position and up_vec.
+    Returns:
+        flattened view_matrix
+    """
+    camera_pose = pos_quat2pose_matrix(camera_pos, camera_quat)
+    camera_extrinsic = np.linalg.inv(camera_pose)
+    camera_rot = camera_extrinsic[:3, :3]
+    s_vec = camera_rot[0, :]
+    up_prime_vec = camera_rot[1, :]
+    lookat_vec = camera_rot[2, :]
+    s_vec = np.cross(lookat_vec, up_prime_vec)
+    up_vec = np.cross(s_vec, lookat_vec)
+    target_pos = np.array(camera_pos) + lookat_vec
+    if vis:
+        vis_frame(
+            target_pos,
+            camera_quat,
+            sim_cid,
+            length=0.2,
+            duration=15,
+        )
+        vis_frame(
+            up_vec,  # + np.array(camera_pos),
+            camera_quat,
+            sim_cid,
+            length=0.2,
+            duration=15,
+        )
+
+    view_matrix = p.computeViewMatrix(camera_pos, target_pos, up_vec, sim_cid)
+    view_matrix = np.array(view_matrix).reshape(4, 4)
+    view_matrix[:, 0] *= -1  # TODO(zyuwei) to investigate the decomposition
+    return view_matrix.flatten()
+
+
+def render(
+    width: int,
+    height: int,
+    view_matrix: np.ndarray,
+    proj_matrix: np.ndarray,
+    near: float,
+    far: float,
+    sim_cid: int,
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Render in simulation.
+
+    Args:
+        width: width for rendered image
+        height: width for rendered height
+        proj_matrix: flattened projection matrix
+        view_matrix: flattened view matrix
+        near: distance to the nearer depth clipping plane.
+        far: distance to the farther depth clipping plane.
+        sim_cid: PyBullet physicsClientId.
+    Returns:
+        rendered rgb, depth and segmentation images."""
+    width, height, rgb, z_buffer, seg = p.getCameraImage(
+        width,
+        height,
+        viewMatrix=view_matrix,
+        projectionMatrix=proj_matrix,
+        renderer=p.ER_TINY_RENDERER,
+        physicsClientId=sim_cid,
+    )
+    # rgb postprocessing
+    rgb = rgb.reshape([height, width, 4])[:, :, :3]
+    rgb = rgb.astype(np.uint8)
+    # depth postprocessing
+    z_buffer = z_buffer.reshape([height, width])
+    depth = zbuffer_to_depth(z_buffer, near, far)
+    # segmentation indices postprocessing
+    seg = seg.reshape([height, width])
+    return rgb, depth, seg
