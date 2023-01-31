@@ -5,6 +5,7 @@ from setuptools import find_packages
 dependencies = [
     "numpy",
     "pybullet",
+    "git+https://github.com/haosulab/MPlib.git",
 ]
 
 dev_tools = [
