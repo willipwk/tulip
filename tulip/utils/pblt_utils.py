@@ -303,8 +303,8 @@ def get_vertices_pos(
         A list of vertices position in world coordinate.
     """
     print(
-        "[Warning]: The vertices query dos not handle and will be inaccurate \
-        when baselink is offset to the origin point in the urdf."
+        "[Warning]: The vertices query dos not handle and will be inaccurate",
+        "when baselink has offset to the origin point in the urdf.",
     )
     obj_pos, obj_quat = p.getBasePositionAndOrientation(obj_id, sim_cid)
     if v_local_pos is None:

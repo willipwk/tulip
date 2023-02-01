@@ -28,6 +28,7 @@ def trans2pose(trans: np.ndarray) -> np.ndarray:
 
 def pose_matrix2pos_quat(pose: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
     """Construct pose matrix from position and quaternion.
+
     Args:
         4x4 pose matrix.
     Returns:
@@ -41,6 +42,7 @@ def pose_matrix2pos_quat(pose: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
 
 def pos_quat2pose_matrix(pos: np.ndarray, quat: np.ndarray) -> np.ndarray:
     """Construct pose matrix from position and quaternion.
+
     Args:
         pos: frame position.
         quat: frame quaternion.
@@ -55,6 +57,7 @@ def pos_quat2pose_matrix(pos: np.ndarray, quat: np.ndarray) -> np.ndarray:
 
 def pos_quat2trans_matrix(pos: np.ndarray, quat: np.ndarray) -> np.ndarray:
     """Construct transformation matrix from position and quaternion.
+
     Args:
         pos: frame position.
         quat: frame quaternion.
@@ -71,15 +74,15 @@ def homogeneous_transform(
     c21_pos: np.ndarray,
     c21_quat: np.ndarray,
 ) -> Tuple[np.ndarray, np.ndarray]:
-    """Homogenious tranformation.
+    """Homogeneous tranformation.
 
     Args:
         c10_pos: frame 1 position wrt c0 coordinate.
-        c10_quat: frame 1 quaterion wrt c0 coordinate.
+        c10_quat: frame 1 quaternion wrt c0 coordinate.
         c21_pos: frame 2 position wrt c1 coordinate.
-        c21_quat: frame 2 quaterion wrt c1 coordinate.
+        c21_quat: frame 2 quaternion wrt c1 coordinate.
     Returns:
-        frame2 position, quaternion wrt c0
+        frame2 position, quaternion wrt c0.
     """
     # pose of the frame to visualize
     t_10 = pos_quat2trans_matrix(c10_pos, c10_quat)

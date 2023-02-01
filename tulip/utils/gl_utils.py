@@ -3,9 +3,17 @@ from tulip.utils.transform_utils import pos_quat2pose_matrix
 
 
 # TODO(zyuwei) io_utils?
-def read_vertices(obj_fn):
+def read_vertices(fn):
+    """Read vertices coordinate xyz wrt object frame from mesh file.
+
+    Args:
+        fn: mesh filename.
+    Returns:
+        (N, 3) array of vertices coordinate xyz.
+    """
+    assert fn.endswith(".obj"), "Currently only support wavefront .obj format."
     vertices = []
-    with open(obj_fn, "r") as fp:
+    with open(fn, "r") as fp:
         lines = [line.strip().split() for line in fp.readlines()]
     for line in lines:
         if line[0] == "v":
@@ -113,6 +121,7 @@ def zbuffer_to_depth(
     far: float,
 ) -> np.ndarray:
     """Convert gl depth buffer to real distance.
+
     Args:
         z_buffer: z_buffer array in target shape.
         near: distance to the nearer depth clipping plane.

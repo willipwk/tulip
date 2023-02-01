@@ -27,7 +27,7 @@ def uvz2xyz(
         cx: principle point at x axis.
         cy: principle point at y axis.
         cam_pose: 4x4 camera pose matrix wrt world coordinate.
-    Return:
+    Returns:
         xyz numpy array for pixel point.
     """
     pos_vec = np.array([(u - cx) * z / fx, (v - cy) * z / fy, z, 1])
@@ -56,7 +56,7 @@ def xyz2uvz(
         cx: principle point at x axis.
         cy: principle point at y axis.
         cam_extrinsic: 4x4 extrinsic matrix as the inverse of camera world pose.
-    Return:
+    Returns:
         u, v, z coordiante
     """
     xyz_vec = np.array([x, y, z, 1])
@@ -88,7 +88,7 @@ def depth2xyz(
         cam_pos: camera position in world coordinate.
         cam_quat: camera quaternion in world coordinate.
         return_pcd: return as a list of pcd point rather than xyz image.
-    Return:
+    Returns:
         xyz image or pointcloud list.
     """
     cam_pose = pos_quat2pose_matrix(cam_pos, cam_quat)
@@ -130,8 +130,8 @@ def pcd2xyz(
         cy: principle point at y axis.
         cam_pos: camera position in world coordinate.
         cam_quat: camera quaternion in world coordinate.
-    Return:
-        (w, h, 3) xyz image
+    Returns:
+        (h, w, 3) xyz image
     """
     cam_pose = pos_quat2pose_matrix(cam_pos, cam_quat)
     cam_extrinsic = np.linalg.inv(cam_pose)
@@ -165,7 +165,10 @@ def vis_depth(depth: np.ndarray, near: float = None, far: float = None) -> None:
 
     Args:
         depth: (h, w) depth image array
-        max: max value in range. 1 for [0, 1] or 255 for [0, 255] array.
+        near: distance to the nearer depth clipping plane during rendering.
+              None for real camera.
+        far: distance to the farther depth clipping plane during rendering.
+             None for real camera.
     """
     if near is None:
         near = depth.min()
