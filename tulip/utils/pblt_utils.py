@@ -126,8 +126,8 @@ def vis_frame(
     pos: np.ndarray,
     quat: np.ndarray,
     sim_cid: int,
-    length: float = 1,
-    duration: float = 10,
+    length: float = 0.5,
+    duration: float = 15,
 ) -> None:
     """Visualize target pose frame.
 
@@ -138,13 +138,13 @@ def vis_frame(
         duration: visualization duration.
         sim_cid: PyBullet physicsClientId."""
     x_axis_end_pos, _ = homogeneous_transform(
-        pos, quat, [1, 0, 0], [0, 0, 0, 1]
+        pos, quat, [length, 0, 0], [0, 0, 0, 1]
     )
     y_axis_end_pos, _ = homogeneous_transform(
-        pos, quat, [0, 1, 0], [0, 0, 0, 1]
+        pos, quat, [0, length, 0], [0, 0, 0, 1]
     )
     z_axis_end_pos, _ = homogeneous_transform(
-        pos, quat, [0, 0, 1], [0, 0, 0, 1]
+        pos, quat, [0, 0, length], [0, 0, 0, 1]
     )
     p.addUserDebugLine(
         pos,
@@ -198,6 +198,39 @@ def vis_points(
     )
 
 
+# def build_lookup_matrix_pblt(
+#     camera_pos: np.ndarray,
+#     camera_quat: np.ndarray,
+#     lookat_axis: str,
+#     up_axis: str,
+#     sim_cid: int,
+# ) -> np.ndarray:
+#     assert lookat_axis in ["x", "y", "z", "-x", "-y", "-z"], "Wrong lookat
+#     axis"
+#     assert up_axis in ["x", "y", "z", "-x", "-y", "-z"], "Wrong up axis"
+#     axis_offset = (
+#         {
+#             "x": [1, 0, 0],
+#             "y": [0, 1, 0],
+#             "z": [0, 0, 1],
+#             "-x": [-1, 0, 0],
+#             "-y": [0, -1, 0],
+#             "-z": [0, 0, -1],
+#         },
+#     )
+#     target_pos = homogeneous_transform(
+#         camera_pos, camera_quat, axis_offset[lookat_axis], [0, 0, 0, 1]
+#     )
+#     up_pos = homogeneous_transform(
+#         camera_pos, camera_quat, axis_offset[up_axis], [0, 0, 0, 1]
+#     )
+#     up_vec = up_pos - camera_pos
+#     view_matrix = p.computeViewMatrix(camera_pos, target_pos, up_vec, sim_cid)
+#     view_matrix = np.array(view_matrix).reshape(4, 4)
+#     view_matrix[:, 0] *= -1  # TODO(zyuwei) to investigate the decomposition
+#     return view_matrix.flatten()
+
+
 def build_view_matrix_pblt(
     camera_pos: np.ndarray,
     camera_quat: np.ndarray,
@@ -223,20 +256,18 @@ def build_view_matrix_pblt(
     s_vec = np.cross(lookat_vec, up_prime_vec)
     up_vec = np.cross(s_vec, lookat_vec)
     target_pos = np.array(camera_pos) + lookat_vec
+    print(target_pos)
+    print(up_vec)
     if vis:
         vis_frame(
             target_pos,
             camera_quat,
             sim_cid,
-            length=0.2,
-            duration=15,
         )
         vis_frame(
-            up_vec,  # + np.array(camera_pos),
+            up_vec + np.array(camera_pos),
             camera_quat,
             sim_cid,
-            length=0.2,
-            duration=15,
         )
 
     view_matrix = p.computeViewMatrix(camera_pos, target_pos, up_vec, sim_cid)
