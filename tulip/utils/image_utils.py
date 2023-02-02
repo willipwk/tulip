@@ -92,15 +92,19 @@ def depth2xyz(
         xyz image or pointcloud list.
     """
     cam_pose = pos_quat2pose_matrix(cam_pos, cam_quat)
+
     h, w = depth.shape
-    pcd = []
-    xyz_image = np.zeros((depth.shape[0], depth.shape[1], 3), np.float32)
-    for h_i in range(h):
-        for w_i in range(w):
-            xyz_image[h_i, w_i] = uvz2xyz(
-                w_i, h_i, depth[h_i, w_i], fx, fy, cx, fy, cam_pose
-            )
-            pcd.append(xyz_image[h_i, w_i])
+    h_coord = np.linspace(0, h, h, endpoint=False)
+    w_coord = np.linspace(0, w, w, endpoint=False)
+    wv, hv = np.meshgrid(w_coord, h_coord)
+    wv = wv.reshape(-1)
+    hv = hv.reshape(-1)
+    z = depth.reshape(-1)
+    uvz_vec = np.array(
+        [(wv - cx) * z / fx, (hv - cy) * z / fy, z, np.ones(z.shape)]
+    )
+    pcd = np.matmul(cam_pose, uvz_vec)[:3].transpose()
+    xyz_image = pcd.reshape(h, w, 3)
     if return_pcd:
         return np.array(pcd)
     else:
@@ -135,14 +139,15 @@ def pcd2xyz(
     """
     cam_pose = pos_quat2pose_matrix(cam_pos, cam_quat)
     cam_extrinsic = np.linalg.inv(cam_pose)
+
+    xyz_vec = np.concatenate([pcd, np.ones((pcd.shape[0], 1))], axis=1)
+    uvz_vec = np.matmul(cam_extrinsic, xyz_vec.transpose())[:3]
+    uvz_vec[0] = uvz_vec[0] * fx / uvz_vec[2] + cx
+    uvz_vec[0] = uvz_vec[0].clip(min=0, max=(width - 1))
+    uvz_vec[1] = uvz_vec[1] * fy / uvz_vec[2] + cy
+    uvz_vec[1] = uvz_vec[1].clip(min=0, max=(height - 1))
     xyz_image = np.zeros((height, width, 3), np.float32)
-    for point in pcd:
-        w_i, h_i, z = xyz2uvz(
-            point[0], point[1], point[2], fx, fy, cx, cy, cam_extrinsic
-        )
-        xyz_image[h_i, w_i] = np.array(
-            [point[0], point[1], point[2]], np.float32
-        )
+    xyz_image[uvz_vec[1].astype(np.int), uvz_vec[0].astype(np.int)] = pcd
     return xyz_image
 
 

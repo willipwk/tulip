@@ -56,7 +56,7 @@ if __name__ == "__main__":
         -0.22584407782434218,
         0.22833227394560413,
     ]
-    vis_frame(camera_pos, camera_quat, sim_cid, length=0.2, duration=15)
+    vis_frame(camera_pos, camera_quat, sim_cid)
     gl_view_matrix = build_view_matrix(camera_pos, camera_quat)
     pblt_view_matrix = build_view_matrix_pblt(
         camera_pos, camera_quat, sim_cid, vis=True
