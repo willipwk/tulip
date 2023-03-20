@@ -1,3 +1,6 @@
 **/__pycache__
 tulip.egg-info
 .pytest_cache
+grab_data
+Dockerfile
+tests/utils/test.png

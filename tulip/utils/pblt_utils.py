@@ -3,6 +3,8 @@ import time
 from typing import List, Tuple
 
 import numpy as np
+import pymeshlab
+
 import pybullet as p
 from tulip.utils.gl_utils import read_vertices, zbuffer_to_depth
 from tulip.utils.transform_utils import (
@@ -81,9 +83,7 @@ def step_sim(
 
 
 def enable_torque_sensor(
-    robot_id: int,
-    joint_indices: List[int],
-    sim_cid: int,
+    robot_id: int, joint_indices: List[int], sim_cid: int
 ) -> None:
     """Enable force/torque sensor on target joint(s).
 
@@ -102,9 +102,7 @@ def enable_torque_sensor(
 
 
 def disable_torque_sensor(
-    robot_id: int,
-    joint_indices: List[int],
-    sim_cid: int,
+    robot_id: int, joint_indices: List[int], sim_cid: int
 ) -> None:
     """Disable force/torque sensor on target joint(s).
 
@@ -259,16 +257,8 @@ def build_view_matrix_pblt(
     print(target_pos)
     print(up_vec)
     if vis:
-        vis_frame(
-            target_pos,
-            camera_quat,
-            sim_cid,
-        )
-        vis_frame(
-            up_vec + np.array(camera_pos),
-            camera_quat,
-            sim_cid,
-        )
+        vis_frame(target_pos, camera_quat, sim_cid)
+        vis_frame(up_vec + np.array(camera_pos), camera_quat, sim_cid)
 
     view_matrix = p.computeViewMatrix(camera_pos, target_pos, up_vec, sim_cid)
     view_matrix = np.array(view_matrix).reshape(4, 4)
@@ -358,3 +348,52 @@ def disable_collisions(obj_id, sim_cid):
     p.setCollisionFilterGroupMask(obj_id, -1, 0, 0, sim_cid)
     for link in range(p.getNumJoints(obj_id)):
         p.setCollisionFilterGroupMask(obj_id, link, 0, 0, sim_cid)
+
+
+def create_urdf_from_mesh(
+    mesh_fn, urdf_fn, mass=0.1, scale=[1, 1, 1], rgba=[1, 1, 1, 1]
+):
+    if not mesh_fn.endswith(".obj"):
+        ms = pymeshlab.MeshSet()
+        ms.load_new_mesh(mesh_fn)
+        mesh_fn = ".".join(mesh_fn.split(".")[:-1]) + ".obj"
+        ms.save_current_mesh(mesh_fn)
+    with open(urdf_fn, "w") as fp:
+        fp.write(
+            """xml version="1.0" ?>
+<robot name="object.urdf">
+  <link name="baseLink">
+    <inertial>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+       <mass value="{1}"/>
+       <inertia ixx="0" ixy="0" ixz="0" iyy="0" iyz="0" izz="0"/>
+    </inertial>
+    <visual>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <geometry>
+        <mesh filename="{0}" scale="{2} {3} {4}"/>
+      </geometry>
+       <material name="white">
+        <color rgba="{5} {6} {7} {8}"/>
+      </material>
+    </visual>
+    <collision>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+     <geometry>
+        <mesh filename="{0}" scale="{2} {3} {4}"/>
+      </geometry>
+    </collision>
+  </link>
+</robot>""".format(
+                mesh_fn,
+                mass,
+                scale[0],
+                scale[1],
+                scale[2],
+                rgba[0],
+                rgba[1],
+                rgba[2],
+                rgba[3],
+            )
+        )
+    return

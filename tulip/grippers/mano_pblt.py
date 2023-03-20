@@ -554,20 +554,16 @@ class HandBody:
                      velocities, torques
         """
         base_pos, base_orn = p.getBasePositionAndOrientation(
-            self._pid,
-            physicsClientId=self.sim_cid,
+            self._pid, physicsClientId=self.sim_cid
         )
         if self._constraint_id != -1:
             constraint_forces = p.getConstraintState(
-                self._constraint_id,
-                physicsClientId=self.sim_cid,
+                self._constraint_id, physicsClientId=self.sim_cid
             )
         else:
             constraint_forces = [0.0] * 6
         joint_states = p.getJointStates(
-            self._pid,
-            self._joint_indices,
-            physicsClientId=self.sim_cid,
+            self._pid, self._joint_indices, physicsClientId=self.sim_cid
         )
         joints_pos, joints_vel, _, joints_torque = zip(*joint_states)
         return (
@@ -589,18 +585,12 @@ class HandBody:
                                    (default: {None})
         """
         p.resetBasePositionAndOrientation(
-            self._pid,
-            position,
-            orientation,
-            physicsClientId=self.sim_cid,
+            self._pid, position, orientation, physicsClientId=self.sim_cid
         )
         if joint_angles is not None:
             for i, angle in zip(self._joint_indices, joint_angles):
                 p.resetJointState(
-                    self._pid,
-                    i,
-                    angle,
-                    physicsClientId=self.sim_cid,
+                    self._pid, i, angle, physicsClientId=self.sim_cid
                 )
 
     def set_target(self, position, orientation, joint_angles=None):
