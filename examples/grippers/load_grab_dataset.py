@@ -8,8 +8,12 @@ from tqdm import tqdm
 
 import pybullet as p
 from tulip.grippers.mano_pblt import HandBody, HandModel45
-from tulip.utils.pblt_utils import create_urdf_from_mesh  # disable_collisions,
-from tulip.utils.pblt_utils import init_sim, step_sim
+from tulip.utils.pblt_utils import (
+    create_urdf_from_mesh,
+    disable_collisions,
+    init_sim,
+    step_sim,
+)
 
 
 class GrabDemo(object):
@@ -31,8 +35,8 @@ class GrabDemo(object):
         self.rhand_model = HandModel45(False, models_dir)
         self.lhand = HandBody(self.sim_cid, self.lhand_model, flags=self.flags)
         self.rhand = HandBody(self.sim_cid, self.rhand_model, flags=self.flags)
-        self.lhand.reset([0.5, 0, 0.5], [0, 0, 0, 1], [0.35] + [0] * 19)
-        self.rhand.reset([-0.5, 0, 0.5], [0, 0, 0, 1], [0.35] + [0] * 19)
+        self.lhand.reset([0.5, 0, 1.0], [0, 0, 0, 1], [0.35] + [0] * 19)
+        self.rhand.reset([-0.5, 0, 1.0], [0, 0, 0, 1], [0.35] + [0] * 19)
         step_sim(20)
 
         self.demo_data = self.parse_demo(demo_npz_fn)
@@ -51,6 +55,9 @@ class GrabDemo(object):
         if end_idx is None:
             end_idx = self.demo_len
 
+        if replay_object:
+            disable_collisions(self.lhand._pid, self.sim_cid)
+            disable_collisions(self.rhand._pid, self.sim_cid)
         for step_id in tqdm(range(start_idx, end_idx, every_n_frame)):
             # set both hands
             for side in ["left", "right"]:
@@ -67,7 +74,7 @@ class GrabDemo(object):
                 getattr(self, f"{side[0]}hand").set_target_from_mano(
                     trans, mano_pose
                 )
-                step_sim(20)
+                step_sim(4)
 
             # set object pose
             if step_id == start_idx:
@@ -87,13 +94,13 @@ class GrabDemo(object):
                     physicsClientId=self.sim_cid,
                     useFixedBase=True,
                 )
-                step_sim(4)
+                step_sim()
 
                 create_urdf_from_mesh(
                     f'{self.grab_dir}/{self.demo_data["object"]["object_mesh"]}',
                     "obj.urdf",
                     mass=0.02,
-                    scale=[0.9, 0.9, 0.9],
+                    scale=[1.0, 1.0, 1.0],
                     rgba=[1, 1, 0, 1],
                 )
                 obj_pos = self.demo_data["object"]["params"]["transl"][step_id]
@@ -108,10 +115,9 @@ class GrabDemo(object):
                     # globalScaling=0.8,
                     physicsClientId=sim_cid,
                 )
-                step_sim(4)
+                step_sim()
             elif replay_object:
                 obj_pos = self.demo_data["object"]["params"]["transl"][step_id]
-                obj_pos[2] += 0.01
                 obj_orn = self.demo_data["object"]["params"]["global_orient"][
                     step_id
                 ]
@@ -121,9 +127,9 @@ class GrabDemo(object):
                     p.getQuaternionFromEuler(obj_orn),
                     physicsClientId=sim_cid,
                 )
-                step_sim(4)
+                step_sim()
 
-            # time.sleep(0.01)
+            time.sleep(0.01)
 
         os.system("rm table.urdf")
         os.system("rm obj.urdf")
