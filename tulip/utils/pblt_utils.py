@@ -352,3 +352,9 @@ def get_vertices_pos(
             ]
         )
     return v_pos
+
+
+def disable_collisions(obj_id, sim_cid):
+    p.setCollisionFilterGroupMask(obj_id, -1, 0, 0, sim_cid)
+    for link in range(p.getNumJoints(obj_id)):
+        p.setCollisionFilterGroupMask(obj_id, link, 0, 0, sim_cid)
