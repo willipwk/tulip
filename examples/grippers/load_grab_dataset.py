@@ -7,16 +7,30 @@ import pybullet as p
 import pybullet_data
 from tqdm import tqdm
 from tulip.grippers.mano_pblt import HandBody, HandModel45
-from tulip.utils.pblt_utils import (
-    create_urdf_from_mesh,
-    disable_collisions,
-    init_sim,
-    step_sim,
-)
+from tulip.utils.mesh_utils import create_urdf_from_mesh
+from tulip.utils.pblt_utils import disable_collisions, init_sim, step_sim
 
 
 class GrabDemo(object):
-    def __init__(self, sim_cid, models_dir, grab_dir, demo_npz_fn, flags=None):
+    def __init__(
+        self,
+        sim_cid: int,
+        models_dir: str,
+        grab_dir: str,
+        demo_npz_fn: str,
+        flags: int = None,
+    ):
+        """Initialize a pybullet simulation containing two hands for grab demo.
+
+        Args:
+            sim_cid: PyBullet simulation client id.
+            models_dir: path to MANO models. Download from:
+                        https://mano.is.tue.mpg.de/
+            grab_dir: path to GRAB dataset which contains contact object meshes.
+                      Downloaded from https://grab.is.tue.mpg.de/.
+                      Folder structure as "grab_dir/tools/contact_meshes/*.ply"
+            demo_npz_fn: path to demo npz file from GRAB dataset.
+            flags: PyBullet simulation flag(s)."""
 
         self.sim_cid = sim_cid
         self.grab_dir = grab_dir
@@ -41,14 +55,34 @@ class GrabDemo(object):
         self.demo_data = self.parse_demo(demo_npz_fn)
         self.demo_len = self.demo_data["object"]["params"]["transl"].shape[0]
 
-    def parse_demo(self, demo_npz_fn):
+    def parse_demo(self, demo_npz_fn: str) -> dict:
+        """Parse demo data from npz file into a dictionary data.
+
+        Args:
+            demo_npz_fn: input demo npz filename.
+        Returns:
+            demo data in dict type.
+        """
         demo_data = np.load(demo_npz_fn, allow_pickle=True)
         demo_data = {k: demo_data[k].item() for k in demo_data.files}
         return demo_data
 
     def replay(
-        self, start_idx=None, end_idx=None, every_n_frame=1, replay_object=True
-    ):
+        self,
+        start_idx: int = None,
+        end_idx: int = None,
+        every_n_frame: int = 1,
+        replay_object: bool = True,
+    ) -> None:
+        """Replay recorded demo data in simulation.
+
+        Args:
+            start_idx: start frame index from the demo sequence.
+            end_idx: end frame index from the demo sequence.
+            every_n_frame: read every_n_frame from the demo frame sequence.
+            replay_object: set object position according to recorded data
+                           instead of physics simulation.
+        """
         if start_idx is None:
             start_idx = 0
         if end_idx is None:
@@ -105,6 +139,7 @@ class GrabDemo(object):
                     useFixedBase=True,
                 )
                 step_sim()
+                os.system("rm table.urdf")
 
                 obj_collision_fn = (
                     ".".join(
@@ -137,6 +172,7 @@ class GrabDemo(object):
                     physicsClientId=sim_cid,
                 )
                 step_sim()
+                os.system("rm obj.urdf")
             elif replay_object:
                 obj_pos = self.demo_data["object"]["params"]["transl"][step_id]
                 obj_orn = self.demo_data["object"]["params"]["global_orient"][
@@ -151,9 +187,6 @@ class GrabDemo(object):
                 step_sim()
 
             time.sleep(0.01)
-
-        os.system("rm table.urdf")
-        os.system("rm obj.urdf")
 
 
 if __name__ == "__main__":
