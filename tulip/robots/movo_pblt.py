@@ -1,6 +1,5 @@
-import uuid
-
 import numpy as np
+
 import pybullet as p
 from pybullet_planning import (
     get_collision_fn,
@@ -19,7 +18,14 @@ from pybullet_tools.ikfast.ikfast import (
     import_ikfast,
 )
 from pybullet_tools.ikfast.utils import IKFastInfo
-from tulip.utils.pblt_utils import init_sim, step_sim, vis_frame, vis_points
+from tulip.utils.pblt_utils import (
+    init_sim,
+    restore_states,
+    save_states,
+    step_sim,
+    vis_frame,
+    vis_points,
+)
 
 
 def get_sample_ik_fn(robot, ik_fn, robot_base_link, ik_joints, fixed_joints):
@@ -358,32 +364,9 @@ class MOVO(object):
         )
         step_sim(20)
 
-    def save_states(self):
-        state_id = uuid.uuid4()
-        joint_indices = list(range(self.num_joints))
-        self.state[state_id] = {
-            "init_joint_pos": self.get_joint_positions(
-                joint_indices=joint_indices
-            ),
-            "init_joint_vel": self.get_joint_velocities(
-                joint_indices=joint_indices
-            ),
-        }
-        return state_id
-
-    def restore_states(self, state_id):
-        assert state_id in self.state, "State not initialized to be restored"
-        joint_indices = range(self.num_joints)
-        self.reset_to_states(
-            q=self.state[state_id]["init_joint_pos"],
-            dq=self.state[state_id]["init_joint_vel"],
-            joint_indices=joint_indices,
-        )
-        self.state.pop(state_id)
-
     # TODO to add parameters into arguments
     def arm_ik(self, final_pose, side, interpolate=True):
-        state_id = self.save_states()
+        state_id = save_states(self)
         if interpolate:
             init_pose = getattr(self, f"{side}_tip_pose")
             pose_path = list(
@@ -435,7 +418,7 @@ class MOVO(object):
             else:
                 self.go_to_positions(ik_q, self.ik_joints[side])
                 step_sim(20)
-        self.restore_states(state_id)
+        restore_states(self, state_id)
         return ik_q
 
     def follow_waypoints(self, path, joint_indices):
@@ -446,7 +429,7 @@ class MOVO(object):
         self, side, final_pose, init_pose=None, execute=False
     ):
 
-        state_id = self.save_states()
+        state_id = save_states(self)
 
         ikfast = import_ikfast(self.ikfast_infos[side])
         ik_fn = ikfast.get_ik
@@ -478,7 +461,7 @@ class MOVO(object):
             collision_fn=collision_fn,
         )
         if not execute:
-            self.restore_states(state_id)
+            restore_states(self, state_id)
         return path
 
     def plan_arm_cartesian_motion_bkup(
@@ -491,7 +474,7 @@ class MOVO(object):
         if use_ik:
             final_q = self.arm_ik(final_pose, side, interpolate=True)
         else:
-            state_id = self.save_states()
+            state_id = save_states(self)
             pose_gen = interpolate_poses(
                 init_pose,
                 final_pose,
@@ -518,9 +501,9 @@ class MOVO(object):
                 final_q = cart_path[-1]
             else:
                 final_q = None
-            self.restore_states(state_id)
+            restore_states(self, state_id)
         # plan a smooth traj from the beginning to the end
-        state_id = self.save_states()
+        state_id = save_states(self)
         if final_q is None:
             path = None
         else:
@@ -528,14 +511,14 @@ class MOVO(object):
                 final_q, joint_indices=self.ik_joints[side], execute=execute
             )
         if not execute:
-            self.restore_states(state_id)
+            restore_states(self, state_id)
         return path
 
     def plan_joint_motion(self, q, joint_indices=None, execute=False):
         if joint_indices is None:
             joint_indices = self.upper_body_indices
         assert len(q) == len(joint_indices), "Wrong joint positions given"
-        state_id = self.save_states()
+        state_id = save_states(self)
         path = plan_joint_motion(
             self.robot,
             joint_indices,
@@ -546,5 +529,5 @@ class MOVO(object):
             diagnosis=False,
         )
         if not execute:
-            self.restore_states(state_id)
+            restore_states(self, state_id)
         return path

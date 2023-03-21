@@ -1,8 +1,10 @@
 """A collection of utility functions for PyBullet simulation."""
 import time
-from typing import List, Tuple
+import uuid
+from typing import Any, List, Tuple
 
 import numpy as np
+
 import pybullet as p
 from tulip.utils.gl_utils import read_vertices, zbuffer_to_depth
 from tulip.utils.transform_utils import (
@@ -352,3 +354,39 @@ def disable_collisions(obj_id: int, sim_cid: int) -> None:
     p.setCollisionFilterGroupMask(obj_id, -1, 0, 0, sim_cid)
     for link in range(p.getNumJoints(obj_id)):
         p.setCollisionFilterGroupMask(obj_id, link, 0, 0, sim_cid)
+
+
+def save_states(instance: Any) -> int:
+    """Save joint state for a robot/gripper object.
+
+    Args:
+        instance: robot/gripper instance.
+    """
+    state_id = uuid.uuid4()
+    joint_indices = list(range(instance.num_joints))
+    instance.state[state_id] = {
+        "init_joint_pos": instance.get_joint_positions(
+            joint_indices=joint_indices
+        ),
+        "init_joint_vel": instance.get_joint_velocities(
+            joint_indices=joint_indices
+        ),
+    }
+    return state_id
+
+
+def restore_states(instance: Any, state_id: int) -> None:
+    """Restore joint state for a robot/gripper object.
+
+    Args:
+        instance: robot/gripper instance.
+        state_id: state uuid to restore from.
+    """
+    assert state_id in instance.state, "State not initialized to be restored"
+    joint_indices = range(instance.num_joints)
+    instance.reset_to_states(
+        q=instance.state[state_id]["init_joint_pos"],
+        dq=instance.state[state_id]["init_joint_vel"],
+        joint_indices=joint_indices,
+    )
+    instance.state.pop(state_id)

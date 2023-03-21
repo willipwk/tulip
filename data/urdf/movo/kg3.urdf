@@ -1,0 +1,209 @@
+<robot name="movo" xmlns:xacro="http://ros.org/wiki/xacro">
+  <!-- Base link is the center of the robot's chassis between the motors projected on the ground -->
+  <link name="base_link"/>
+  <joint name="ee_fixed_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="ee_link"/>
+    <origin rpy="3.14159265 1.570796325 0" xyz="0 0 0.500"/>
+  </joint>
+  <link name="ee_link"/>
+  <joint name="gripper_finger_tip_joint" type="fixed">
+    <parent link="ee_link"/>
+    <child link="gripper_finger_tip_link"/>
+    <origin rpy="-0.02638769 1.38873783 1.59643027" xyz="0.02682196 -0.00240531 0.0163839" />
+  </joint>
+  <link name="tip_link"/>
+  <joint name="tip_fixed_joint" type="fixed">                    
+    <parent link="ee_link" />
+    <child link="tip_link" />
+    <origin xyz="0.02638769 -0.00240531 0.0163839" rpy="-0.02638769 1.38873783 1.59643027"/>
+  </joint>
+
+
+  <link name="gripper_finger_tip_link"/>
+  <joint name="gripper_base_joint" type="fixed">
+    <parent link="ee_link"/>
+    <child link="gripper_base_link"/>
+    <origin rpy="-3.14159265 1.570796325 0" xyz="-0.16 0 0"/>
+  </joint>
+  <link name="gripper_base_link">
+    <visual>
+      <geometry>
+        <mesh filename="movo_description/meshes/manipulation/kinova_grippers/visual/kg3_base_link.dae"/>
+      </geometry>
+    </visual>
+    <collision>
+      <geometry>
+        <mesh filename="movo_description/meshes/manipulation/kinova_grippers/collision/kg3_base_link.stl"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <mass value="0.799312"/>
+      <origin xyz="0.000007 -0.005175 -0.067280"/>
+      <inertia ixx="0.000790" ixy="0.000000" ixz="0.000004" iyx="0.000000" iyy="0.000650" iyz="0.000003" izx="0.000004" izy="0.000003" izz="0.000823"/>
+    </inertial>
+  </link>
+  <joint name="gripper_finger1_joint" type="revolute">
+    <parent link="gripper_base_link"/>
+    <child link="gripper_finger1_knuckle_link"/>
+    <axis xyz="0 0 1"/>
+    <origin rpy="1.4676 -0.0092813 -1.7501" xyz="-0.0027954 0.031318 -0.11464"/>
+    <limit damping="0.005" effort="3.0" friction="0.005" lower="0.0" upper="0.986111027" velocity="1.0"/>
+  </joint>
+  <link name="gripper_finger1_knuckle_link">
+    <visual>
+      <geometry>
+        <mesh filename="movo_description/meshes/manipulation/kinova_grippers/visual/finger_knuckle.dae"/>
+      </geometry>
+    </visual>
+    <collision>
+      <geometry>
+        <mesh filename="movo_description/meshes/manipulation/kinova_grippers/collision/finger_knuckle.stl"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <mass value="0.009127"/>
+      <origin xyz="-0.016752 -0.013874 0.0"/>
+      <inertia ixx="0.000002" ixy="0.000001" ixz="0.000000" iyx="0.000001" iyy="0.000001" iyz="0.000000" izx="0.000000" izy="0.000000" izz="0.000002"/>
+    </inertial>
+  </link>
+  <joint name="gripper_finger2_joint" type="revolute">
+    <parent link="gripper_base_link"/>
+    <child link="gripper_finger2_knuckle_link"/>
+    <axis xyz="0 0 1"/>
+    <origin rpy="1.570796325 0 1.7555" xyz="0.022289 -0.027253 -0.11471"/>
+    <limit damping="0.005" effort="3.0" friction="0.005" lower="0.0" upper="0.986111027" velocity="1.0"/>
+    <mimic joint="gripper_finger1_joint"/>
+  </joint>
+  <link name="gripper_finger2_knuckle_link">
+    <visual>
+      <geometry>
+        <mesh filename="movo_description/meshes/manipulation/kinova_grippers/visual/finger_knuckle.dae"/>
+      </geometry>
+    </visual>
+    <collision>
+      <geometry>
+        <mesh filename="movo_description/meshes/manipulation/kinova_grippers/collision/finger_knuckle.stl"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <mass value="0.009127"/>
+      <origin xyz="-0.016752 -0.013874 0.0"/>
+      <inertia ixx="0.000002" ixy="0.000001" ixz="0.000000" iyx="0.000001" iyy="0.000001" iyz="0.000000" izx="0.000000" izy="0.000000" izz="0.000002"/>
+    </inertial>
+  </link>
+  <joint name="gripper_finger3_joint" type="revolute">
+    <parent link="gripper_base_link"/>
+    <child link="gripper_finger3_knuckle_link"/>
+    <axis xyz="0 0 1"/>
+    <origin rpy="1.570796325 0 1.3861" xyz="-0.022284 -0.027223 -0.11473"/>
+    <limit damping="0.005" effort="3.0" friction="0.005" lower="0.0" upper="0.986111027" velocity="1.0"/>
+    <mimic joint="gripper_finger1_joint"/>
+  </joint>
+  <link name="gripper_finger3_knuckle_link">
+    <visual>
+      <geometry>
+        <mesh filename="movo_description/meshes/manipulation/kinova_grippers/visual/finger_knuckle.dae"/>
+      </geometry>
+    </visual>
+    <collision>
+      <geometry>
+        <mesh filename="movo_description/meshes/manipulation/kinova_grippers/collision/finger_knuckle.stl"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <mass value="0.009127"/>
+      <origin xyz="-0.016752 -0.013874 0.0"/>
+      <inertia ixx="0.000002" ixy="0.000001" ixz="0.000000" iyx="0.000001" iyy="0.000001" iyz="0.000000" izx="0.000000" izy="0.000000" izz="0.000002"/>
+    </inertial>
+  </link>
+  <joint name="gripper_finger1_finger_tip_joint" type="fixed">
+    <parent link="gripper_finger1_knuckle_link"/>
+    <child link="gripper_finger1_finger_tip_link"/>
+    <origin rpy="0 0 0" xyz="-0.0245981 -0.036051 0.0"/>
+  </joint>
+  <link name="gripper_finger1_finger_tip_link">
+    <visual>
+      <geometry>
+        <mesh filename="movo_description/meshes/manipulation/kinova_grippers/visual/finger_tip.dae"/>
+      </geometry>
+    </visual>
+    <collision>
+      <geometry>
+        <mesh filename="movo_description/meshes/manipulation/kinova_grippers/collision/finger_tip.stl"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <mass value="0.012690"/>
+      <origin xyz="-0.011926 -0.009701 0.0"/>
+      <inertia ixx="0.000002" ixy="0.000001" ixz="0.000000" iyx="0.000001" iyy="0.000001" iyz="0.000000" izx="0.000000" izy="0.000000" izz="0.000002"/>
+    </inertial>
+  </link>
+  <joint name="gripper_finger2_finger_tip_joint" type="fixed">
+    <parent link="gripper_finger2_knuckle_link"/>
+    <child link="gripper_finger2_finger_tip_link"/>
+    <origin rpy="0 0 0" xyz="-0.0245981 -0.036051 0.0"/>
+  </joint>
+  <link name="gripper_finger2_finger_tip_link">
+    <visual>
+      <geometry>
+        <mesh filename="movo_description/meshes/manipulation/kinova_grippers/visual/finger_tip.dae"/>
+      </geometry>
+    </visual>
+    <collision>
+      <geometry>
+        <mesh filename="movo_description/meshes/manipulation/kinova_grippers/collision/finger_tip.stl"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <mass value="0.012690"/>
+      <origin xyz="-0.011926 -0.009701 0.0"/>
+      <inertia ixx="0.000002" ixy="0.000001" ixz="0.000000" iyx="0.000001" iyy="0.000001" iyz="0.000000" izx="0.000000" izy="0.000000" izz="0.000002"/>
+    </inertial>
+  </link>
+  <joint name="gripper_finger3_finger_tip_joint" type="fixed">
+    <parent link="gripper_finger3_knuckle_link"/>
+    <child link="gripper_finger3_finger_tip_link"/>
+    <origin rpy="0 0 0" xyz="-0.0245981 -0.036051 0.0"/>
+  </joint>
+  <link name="gripper_finger3_finger_tip_link">
+    <visual>
+      <geometry>
+        <mesh filename="movo_description/meshes/manipulation/kinova_grippers/visual/finger_tip.dae"/>
+      </geometry>
+    </visual>
+    <collision>
+      <geometry>
+        <mesh filename="movo_description/meshes/manipulation/kinova_grippers/collision/finger_tip.stl"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <mass value="0.012690"/>
+      <origin xyz="-0.011926 -0.009701 0.0"/>
+      <inertia ixx="0.000002" ixy="0.000001" ixz="0.000000" iyx="0.000001" iyy="0.000001" iyz="0.000000" izx="0.000000" izy="0.000000" izz="0.000002"/>
+    </inertial>
+  </link>
+
+  <joint name="gripper_finger1_end_joint" type="fixed">
+    <parent link="gripper_finger1_finger_tip_link"/>
+    <child link="gripper_finger1_end_link"/>
+    <origin rpy="0 0 0" xyz="-0.0245981 -0.036051 0.0"/>
+  </joint>
+  <link name="gripper_finger1_end_link"/>
+
+  <joint name="gripper_finger2_end_joint" type="fixed">
+    <parent link="gripper_finger2_finger_tip_link"/>
+    <child link="gripper_finger2_end_link"/>
+    <origin rpy="0 0 0" xyz="-0.0245981 -0.036051 0.0"/>
+  </joint>
+  <link name="gripper_finger2_end_link"/>
+
+  <joint name="gripper_finger3_end_joint" type="fixed">
+    <parent link="gripper_finger3_finger_tip_link"/>
+    <child link="gripper_finger3_end_link"/>
+    <origin rpy="0 0 0" xyz="-0.0245981 -0.036051 0.0"/>
+  </joint>
+  <link name="gripper_finger3_end_link"/>
+
+
+</robot>

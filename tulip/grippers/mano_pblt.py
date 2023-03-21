@@ -8,8 +8,9 @@ import pickle as pkl
 import tempfile
 
 import numpy as np
-import pybullet as p
 from scipy.spatial.transform import Rotation as R
+
+import pybullet as p
 
 Joint = collections.namedtuple("Joint", ["origin", "basis", "axes", "limits"])
 
@@ -721,7 +722,7 @@ class HandBody:
             linkParentIndices=link_parent_indices,
             linkJointTypes=link_joint_types,
             linkJointAxis=link_joint_axis,
-            flags=flags,
+            # flags=flags,
             physicsClientId=self.sim_cid,
         )
 
