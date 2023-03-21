@@ -1,27 +1,40 @@
-import sys
-import time
+import uuid
 
-import ipdb
 import numpy as np
 import pybullet as p
 from pybullet_planning import (
+    get_collision_fn,
+    get_joint_positions,
     get_movable_joints,
+    interpolate_poses,
     inverse_kinematics,
     plan_cartesian_motion,
+    plan_cartesian_motion_lg,
     plan_joint_motion,
+    sample_tool_ik,
 )
-from pybullet_planning.interfaces.task_modeling.path_interpolation import (
-    interpolate_poses,
-)
-from pybullet_planning.utils import set_client
 from pybullet_tools.ikfast.ikfast import (
     either_inverse_kinematics,
     get_ik_joints,
+    import_ikfast,
 )
 from pybullet_tools.ikfast.utils import IKFastInfo
-from scipy.spatial.transform import Rotation as R
-from tulip.robots.franka_panda_pblt import FrankaPanda
 from tulip.utils.pblt_utils import init_sim, step_sim, vis_frame, vis_points
+
+
+def get_sample_ik_fn(robot, ik_fn, robot_base_link, ik_joints, fixed_joints):
+    def sample_ik_fn(world_from_tcp):
+        return sample_tool_ik(
+            ik_fn=ik_fn,
+            robot=robot,
+            ik_joints=ik_joints,
+            world_from_tcp=world_from_tcp,
+            base_link=robot_base_link,
+            sampled=[0, np.random.uniform(-np.pi, np.pi)],
+            get_all=True,
+        )
+
+    return sample_ik_fn
 
 
 class MOVO(object):
@@ -32,10 +45,38 @@ class MOVO(object):
         self.robot = p.loadURDF(
             urdf_file, physicsClientId=self.sim_cid, useFixedBase=True
         )
+        self.table = p.loadURDF(
+            "cube/cube.urdf", basePosition=(0.65, 0, 0.2), useFixedBase=True
+        )
+        """
+        self.tie = p.loadURDF("tie/tie.urdf", useFixedBase=True)
+        with open("tie/tie_segment_world.xyz", "r") as fp:
+            for line in fp:
+                pcd.append([float(element) for element in line.strip().split()])
+        vis_points(
+            np.array(pcd),
+            self.sim_cid,
+            sample_size=5000,
+            color=[0, 1, 0],
+            duration=50,
+        )
+        pcd = []
+        with open("tie/tie.xyz", "r") as fp:
+            for line in fp:
+                pcd.append([float(element) for element in line.strip().split()])
+        vis_points(
+            np.array(pcd),
+            self.sim_cid,
+            sample_size=5000,
+            color=[0, 0, 1],
+            duration=50,
+        )
+        """
 
         self.parse_joint_info()
         self.init_arm_ik()
         self.parse_srdf_file(srdf_file)
+        self.state = {}
 
         self.home_pos = [
             -1.5,
@@ -275,62 +316,35 @@ class MOVO(object):
         if joint_indices is None:
             joint_indices = self.upper_body_indices
         joint_states = p.getJointStates(
-            self.robot,
-            jointIndices=joint_indices,
-            physicsClientId=self.sim_cid,
+            self.robot, jointIndices=joint_indices, physicsClientId=self.sim_cid
+        )
+        return [js[0] for js in joint_states]
+
+    def get_joint_velocities(self, joint_names=None, joint_indices=None):
+        if joint_indices is None:
+            joint_indices = self.upper_body_indices
+        joint_states = p.getJointStates(
+            self.robot, jointIndices=joint_indices, physicsClientId=self.sim_cid
         )
         return [js[1] for js in joint_states]
 
-    # TODO to add parameters into arguments
-    def arm_ik(self, final_pose, side, interpolate=True):
-        stateId = p.saveState()
-        if interpolate:
-            init_pose = getattr(self, f"{side}_tip_pose")
-            pose_path = list(
-                interpolate_poses(
-                    init_pose,
-                    final_pose,
-                    pos_step_size=0.1,
-                    ori_step_size=np.pi / 6,
-                )
-            )
+    def reset_to_states(self, q, dq=None, joint_indices=None):
+        if joint_indices is None:
+            joint_indices = self.upper_body_indices
+        assert len(q) == len(joint_indices), "Wrong joint positions given"
+        if dq is not None:
+            assert len(dq) == len(joint_indices), "Wrong joint positions given"
         else:
-            pose_path = [final_pose]
-        for i, pose in enumerate(pose_path):
-            try:
-                ik_q = next(
-                    either_inverse_kinematics(
-                        self.robot,
-                        self.ikfast_infos[side],
-                        self.ln2idx[f"{side}_tip_link"],
-                        pose,
-                        # fixed_joints=[],
-                        fixed_joints=self.ik_fixed_joints[side],
-                        max_time=3,
-                        max_candidates=10000,
-                        # max_attempts=1000,
-                        verbose=False,
-                    )
-                )
-            except:
-                """
-                res = input("enter to continue")
-                if res == 'd':
-                    ipdb; ipdb.set_trace()
-                """
-                ik_q = None
-            if ik_q is None:
-                break
-            else:
-                self.go_to_positions(ik_q, self.ik_joints[side])
-                step_sim(20)
-        p.restoreState(stateId)
-        time.sleep(0.2)
-        return ik_q
-
-    def follow_waypoints(self, path, joint_indices):
-        for wp in path:
-            self.go_to_positions(wp, joint_indices)
+            dq = [0 for idx in joint_indices]
+        for joint_idx, joint_pos, joint_vel in zip(joint_indices, q, dq):
+            p.resetJointState(
+                self.robot,
+                jointIndex=joint_idx,
+                targetValue=joint_pos,
+                targetVelocity=joint_vel,
+                physicsClientId=self.sim_cid,
+            )
+        step_sim(1)
 
     def go_to_positions(self, q, joint_indices=None):
         if joint_indices is None:
@@ -344,13 +358,131 @@ class MOVO(object):
         )
         step_sim(20)
 
+    def save_states(self):
+        state_id = uuid.uuid4()
+        joint_indices = list(range(self.num_joints))
+        self.state[state_id] = {
+            "init_joint_pos": self.get_joint_positions(
+                joint_indices=joint_indices
+            ),
+            "init_joint_vel": self.get_joint_velocities(
+                joint_indices=joint_indices
+            ),
+        }
+        return state_id
+
+    def restore_states(self, state_id):
+        assert state_id in self.state, "State not initialized to be restored"
+        joint_indices = range(self.num_joints)
+        self.reset_to_states(
+            q=self.state[state_id]["init_joint_pos"],
+            dq=self.state[state_id]["init_joint_vel"],
+            joint_indices=joint_indices,
+        )
+        self.state.pop(state_id)
+
+    # TODO to add parameters into arguments
+    def arm_ik(self, final_pose, side, interpolate=True):
+        state_id = self.save_states()
+        if interpolate:
+            init_pose = getattr(self, f"{side}_tip_pose")
+            pose_path = list(
+                interpolate_poses(
+                    init_pose,
+                    final_pose,
+                    pos_step_size=0.1,
+                    ori_step_size=np.pi / 6,
+                )
+            )
+        else:
+            pose_path = [final_pose]
+
+        ikfast = import_ikfast(self.ikfast_infos[side])
+        ik_fn = ikfast.get_ik
+        ik_joints = get_ik_joints(
+            self.robot, self.ikfast_infos[side], self.ln2idx[f"{side}_tip_link"]
+        )
+        collision_fn = get_collision_fn(
+            self.robot,
+            ik_joints,
+            obstacles=[],
+            attachments=[],
+            self_collision=True,
+            disabled_collisions=self.disable_collision_link_pairs,
+            custom_limits=self.custom_limits,
+        )
+        for i, pose in enumerate(pose_path):
+            try:
+                ik_q = next(
+                    either_inverse_kinematics(
+                        self.robot,
+                        self.ikfast_infos[side],
+                        self.ln2idx[f"{side}_tip_link"],
+                        pose,
+                        # fixed_joints=[],
+                        fixed_joints=self.ik_fixed_joints[side],
+                        max_time=5,
+                        max_candidates=500000,
+                        # max_attempts=1000,
+                        verbose=False,
+                        collision_fn=collision_fn,
+                    )
+                )
+            except:
+                ik_q = None
+            if ik_q is None:
+                break
+            else:
+                self.go_to_positions(ik_q, self.ik_joints[side])
+                step_sim(20)
+        self.restore_states(state_id)
+        return ik_q
+
+    def follow_waypoints(self, path, joint_indices):
+        for wp in path:
+            self.go_to_positions(wp, joint_indices)
+
     def plan_arm_cartesian_motion(
-        self,
-        side,
-        final_pose,
-        init_pose=None,
-        execute=False,
-        use_ik=True,
+        self, side, final_pose, init_pose=None, execute=False
+    ):
+
+        state_id = self.save_states()
+
+        ikfast = import_ikfast(self.ikfast_infos[side])
+        ik_fn = ikfast.get_ik
+        ik_joints = get_ik_joints(
+            self.robot, self.ikfast_infos[side], self.ln2idx[f"{side}_tip_link"]
+        )
+        sample_ik_fn = get_sample_ik_fn(
+            self.robot,
+            ik_fn,
+            -1,  # self.ln2idx[self.ikfast_infos[side].base_link],
+            ik_joints,
+            self.ik_fixed_joints[side],
+        )
+
+        collision_fn = get_collision_fn(
+            self.robot,
+            ik_joints,
+            obstacles=[],
+            attachments=[],
+            self_collision=True,
+            disabled_collisions=self.disable_collision_link_pairs,
+            custom_limits=self.custom_limits,
+        )
+        path, cost = plan_cartesian_motion_lg(
+            robot=self.robot,
+            joints=ik_joints,
+            waypoint_poses=[final_pose],
+            sample_ik_fn=sample_ik_fn,
+            collision_fn=collision_fn,
+        )
+        if not execute:
+            self.restore_states(state_id)
+        return path
+
+    def plan_arm_cartesian_motion_bkup(
+        self, side, final_pose, init_pose=None, execute=False, use_ik=True
     ):
         assert side in ["left", "right"], "Wrong arm side input."
 
@@ -359,7 +491,7 @@ class MOVO(object):
         if use_ik:
             final_q = self.arm_ik(final_pose, side, interpolate=True)
         else:
-            stateId = p.saveState()
+            state_id = self.save_states()
             pose_gen = interpolate_poses(
                 init_pose,
                 final_pose,
@@ -386,227 +518,33 @@ class MOVO(object):
                 final_q = cart_path[-1]
             else:
                 final_q = None
-            p.restoreState(stateId)
-            time.sleep(0.1)
+            self.restore_states(state_id)
         # plan a smooth traj from the beginning to the end
-        stateId = p.saveState()
+        state_id = self.save_states()
         if final_q is None:
             path = None
         else:
             path = self.plan_joint_motion(
-                final_q,
-                joint_indices=self.ik_joints[side],
-                execute=execute,
+                final_q, joint_indices=self.ik_joints[side], execute=execute
             )
         if not execute:
-            p.restoreState(stateId)
-            time.sleep(0.2)
+            self.restore_states(state_id)
         return path
 
     def plan_joint_motion(self, q, joint_indices=None, execute=False):
         if joint_indices is None:
             joint_indices = self.upper_body_indices
         assert len(q) == len(joint_indices), "Wrong joint positions given"
-        stateId = p.saveState()
+        state_id = self.save_states()
         path = plan_joint_motion(
             self.robot,
             joint_indices,
             q,
-            self_collisions=True,
+            self_collisions=False,  # True,
             disabled_collisions=self.disable_collision_link_pairs,
             custom_limits=self.custom_limits,
             diagnosis=False,
         )
         if not execute:
-            p.restoreState(stateId)
-            time.sleep(0.2)
+            self.restore_states(state_id)
         return path
-
-
-def test_cartesian_plan(movo, side):
-    tip_pos, tip_quat = movo.get_tip_pose(side)
-    tip_pos[0] += 0.3
-    tip_pos[1] -= 0.2
-    tip_pos[2] -= 0.3
-    path = movo.plan_arm_cartesian_motion(
-        side, (tip_pos, tip_quat), execute=True
-    )
-    assert len(path) > 0, "No path planned"
-
-
-def test_joint_plan(movo):
-    path = movo.plan_joint_motion(movo.home_pos, execute=True)
-    path = movo.plan_joint_motion(movo.tuck_pos, execute=True)
-    path = movo.plan_joint_motion(movo.before_grasp_pos, execute=True)
-    assert len(path) > 0, "No path planned"
-
-
-def localframe2quat(localframe):
-    x_dir, y_dir, z_dir = localframe
-    local_rot = np.array([x_dir, y_dir, z_dir]).T
-    local_quat = R.from_matrix(local_rot).as_quat()
-    return local_quat
-
-
-def local2ee_frame(localframe):
-    x_dir, y_dir, z_dir = localframe
-    ee_x_dir = -np.array(x_dir)
-    ee_z_dir = -np.array(z_dir)
-    ee_y_dir = np.cross(ee_z_dir, ee_x_dir)
-    ee_rot = np.array([ee_x_dir, ee_y_dir, ee_z_dir]).T
-    ee_quat = R.from_matrix(ee_rot).as_quat()
-    return ee_quat
-
-
-def rotate_pitch_by_pi(ee_quat):
-    ee_orn = R.from_quat(ee_quat).as_euler("xyz")
-    ee_orn[1] += np.pi
-    return R.from_euler("xyz", ee_orn).as_quat()
-
-
-def execute_control_pos(side, pos, localframe, movo):
-    ee_quat = getattr(movo, f"{side}_tip_pose")[1]
-    vis_frame(
-        pos,
-        ee_quat,
-        movo.sim_cid,
-        length=0.1,
-        duration=15,
-    )
-    movo.plan_arm_cartesian_motion(side, (pos, ee_quat), execute=True)
-    vis_frame(
-        getattr(movo, f"{side}_tip_pose")[0],
-        getattr(movo, f"{side}_tip_pose")[1],
-        movo.sim_cid,
-        length=0.2,
-        duration=15,
-    )
-
-
-def execute_control_pose(side, pos, localframe, movo):
-    vis_frame(
-        pos,
-        localframe2quat(localframe),
-        movo.sim_cid,
-        length=0.1,
-        duration=15,
-    )
-    ee_quat = local2ee_frame(localframe)
-    ik_q = movo.arm_ik((pos, ee_quat), side)
-    if ik_q is None:
-        ee_quat = rotate_pitch_by_pi(ee_quat)
-        vis_frame(
-            pos,
-            ee_quat,
-            movo.sim_cid,
-            length=0.1,
-            duration=15,
-        )
-        ik_q = movo.arm_ik((pos, ee_quat), side)
-    assert ik_q is not None, "No valid IK solution"
-    if ik_q is not None:
-        movo.plan_joint_motion(ik_q, movo.ik_joints[side], execute=True)
-        vis_frame(
-            getattr(movo, f"{side}_tip_pose")[0],
-            getattr(movo, f"{side}_tip_pose")[1],
-            movo.sim_cid,
-            length=0.2,
-            duration=15,
-        )
-
-
-def test_dual_arm_actions(left_pose_seq, right_pose_seq):
-    for lp, rp in zip(left_pose_seq, right_pose_seq):
-        try:
-            execute_control_pose("right", rp[0], rp[1], movo)
-            print("Done for right arm")
-        except:
-            print("Infeasible pose for the right arm!")
-        try:
-            execute_control_pose("left", lp[0], lp[1], movo)
-            print("Done for left arm")
-        except:
-            print("Infeasible pose for the left arm!")
-        input("enter to continue")
-
-
-def test_limit(
-    movo,
-    side,
-    mode,
-    start_x=0.35,
-    start_y=0,
-    end_x=1.3,
-    end_y=1,
-    delta_x=0.05,
-    delta_y=0.05,
-    continue_x=None,
-    continue_y=None,
-):
-    if side == "left":
-        if mode == "h":
-            quat = [0.71499251, -0.69844223, 0.02806634, 0.01328292]
-        else:
-            quat = [-0.50334611, 0.34731909, 0.39082314, -0.68794579]
-        x_sign = 1
-        y_sign = 1
-    if side == "right":
-        if mode == "v":
-            quat = [-0.50334611, 0.34731909, 0.39082314, -0.68794579]
-            z = 0.468
-        else:
-            quat = [0.75726237, -0.63944748, -0.06846320, -0.11390090]
-        x_sign = 1
-        y_sign = -1
-    x = start_x
-    y = start_y
-    z = 0.4
-    while x <= end_x:
-        while y <= end_x:
-            pos_x = x * x_sign
-            pos_y = y * y_sign
-            if (continue_x is not None) and (continue_y is not None):
-                if pos_x < continue_x:
-                    y += delta_y
-                    continue
-                elif pos_x == continue_x:
-                    if pos_y <= continue_y:
-                        y += delta_y
-                        continue
-            print(side, mode, pos_x, pos_y, z)
-
-            movo.go_to_positions(movo.before_grasp_pos)
-            pos = [pos_x, pos_y, z]
-            path = movo.plan_arm_cartesian_motion(
-                side, (pos, quat), execute=True
-            )
-            has_solution = int(path is not None)
-            print("    ==>:", has_solution)
-            with open("workspace.txt", "a") as fp:
-                fp.write(f"{side} {mode} {pos_x} {pos_y} {z} {has_solution}\n")
-            y += delta_y
-        x += delta_x
-        y = start_y
-
-
-if __name__ == "__main__":
-
-    urdf_file = "/home/zyuwei/tulip/data/urdf/movo/simplified_movo.urdf"
-    srdf_file = "/home/zyuwei/tulip/data/urdf/movo/simplified_movo.srdf"
-    movo = MOVO(urdf_file, srdf_file)
-    """
-    test_cartesian_plan(movo, "left")
-    input("enter to continue")
-    test_cartesian_plan(movo, "right")
-    input("enter to continue")
-    # test_joint_plan(movo, movo.tuck_pos)
-    # input("enter to continue")
-    """
-    # reset_movo(movo)
-
-    # from diffcloth_data import left_pose_seq, right_pose_seq
-    # test_dual_arm_actions(left_pose_seq, right_pose_seq)
-    test_limit(movo, "left", "h", continue_x=0.45, continue_y=0.05)
-    test_limit(movo, "left", "v")
-    test_limit(movo, "right", "h")
-    test_limit(movo, "right", "v")
