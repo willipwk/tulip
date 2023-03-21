@@ -3,10 +3,9 @@ import sys
 import time
 
 import numpy as np
+import pybullet as p
 import pybullet_data
 from tqdm import tqdm
-
-import pybullet as p
 from tulip.grippers.mano_pblt import HandBody, HandModel45
 from tulip.utils.pblt_utils import (
     create_urdf_from_mesh,
@@ -78,9 +77,20 @@ class GrabDemo(object):
 
             # set object pose
             if step_id == start_idx:
+                table_collision_fn = (
+                    ".".join(
+                        f'{self.grab_dir}/{self.demo_data["table"]["table_mesh"]}'.split(
+                            "."
+                        )[
+                            :-1
+                        ]
+                    )
+                    + "_coacd.obj"
+                )
                 create_urdf_from_mesh(
                     f'{self.grab_dir}/{self.demo_data["table"]["table_mesh"]}',
                     "table.urdf",
+                    collision_fn=table_collision_fn,
                 )
                 table_pos = self.demo_data["table"]["params"]["transl"][step_id]
                 table_orn = self.demo_data["table"]["params"]["global_orient"][
@@ -96,9 +106,20 @@ class GrabDemo(object):
                 )
                 step_sim()
 
+                obj_collision_fn = (
+                    ".".join(
+                        f'{self.grab_dir}/{self.demo_data["object"]["object_mesh"]}'.split(
+                            "."
+                        )[
+                            :-1
+                        ]
+                    )
+                    + "_coacd.obj"
+                )
                 create_urdf_from_mesh(
                     f'{self.grab_dir}/{self.demo_data["object"]["object_mesh"]}',
                     "obj.urdf",
+                    collision_fn=obj_collision_fn,
                     mass=0.02,
                     scale=[1.0, 1.0, 1.0],
                     rgba=[1, 1, 0, 1],
