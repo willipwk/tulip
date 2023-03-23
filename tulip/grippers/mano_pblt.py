@@ -6,11 +6,11 @@ import functools
 import os
 import pickle as pkl
 import tempfile
+from typing import Tuple
 
 import numpy as np
-from scipy.spatial.transform import Rotation as R
-
 import pybullet as p
+from scipy.spatial.transform import Rotation as R
 
 Joint = collections.namedtuple("Joint", ["origin", "basis", "axes", "limits"])
 
@@ -511,7 +511,7 @@ class HandBody:
             color {list} -- color RGBA (default: {None})
             shape_betas {array} -- MANO shape beta parameters  (default: {None})
         """
-        self.sim_cid = sim_cid
+        self._sim_cid = sim_cid
         self._model = hand_model
         self._flags = flags
         self._vertices = hand_model.vertices(betas=shape_betas)
@@ -548,6 +548,14 @@ class HandBody:
         """
         return self._joint_limits
 
+    @property
+    def base_pose(self) -> Tuple[np.ndarray, np.ndarray]:
+        """Base pose of the hand.
+        Returns:
+            position and quaternion of the base link.
+        """
+        return self.get_base_pose()
+
     def get_state(self):
         """Get current hand state.
         Returns:
@@ -555,16 +563,16 @@ class HandBody:
                      velocities, torques
         """
         base_pos, base_orn = p.getBasePositionAndOrientation(
-            self._pid, physicsClientId=self.sim_cid
+            self._pid, physicsClientId=self._sim_cid
         )
         if self._constraint_id != -1:
             constraint_forces = p.getConstraintState(
-                self._constraint_id, physicsClientId=self.sim_cid
+                self._constraint_id, physicsClientId=self._sim_cid
             )
         else:
             constraint_forces = [0.0] * 6
         joint_states = p.getJointStates(
-            self._pid, self._joint_indices, physicsClientId=self.sim_cid
+            self._pid, self._joint_indices, physicsClientId=self._sim_cid
         )
         joints_pos, joints_vel, _, joints_torque = zip(*joint_states)
         return (
@@ -586,12 +594,12 @@ class HandBody:
                                    (default: {None})
         """
         p.resetBasePositionAndOrientation(
-            self._pid, position, orientation, physicsClientId=self.sim_cid
+            self._pid, position, orientation, physicsClientId=self._sim_cid
         )
         if joint_angles is not None:
             for i, angle in zip(self._joint_indices, joint_angles):
                 p.resetJointState(
-                    self._pid, i, angle, physicsClientId=self.sim_cid
+                    self._pid, i, angle, physicsClientId=self._sim_cid
                 )
 
     def set_target(self, position, orientation, joint_angles=None):
@@ -609,7 +617,7 @@ class HandBody:
                 jointChildPivot=position,
                 jointChildFrameOrientation=orientation,
                 maxForce=10.0,
-                physicsClientId=self.sim_cid,
+                physicsClientId=self._sim_cid,
             )
         if joint_angles is not None:
             p.setJointMotorControlArray(
@@ -618,8 +626,15 @@ class HandBody:
                 controlMode=p.POSITION_CONTROL,
                 targetPositions=joint_angles,
                 forces=[0.5] * len(joint_angles),
-                physicsClientId=self.sim_cid,
+                physicsClientId=self._sim_cid,
             )
+
+    def get_base_pose(self) -> Tuple[np.ndarray, np.ndarray]:
+        pos, quat = p.getBasePositionAndOrientation(
+            self._pid,
+            physicsClientId=self._sim_cid,
+        )
+        return np.array(pos), np.array(quat)
 
     def get_mano_state(self):
         """Get current hand state as a MANO model state.
@@ -641,6 +656,18 @@ class HandBody:
         angles, basis = self._model.mano_to_angles(mano_pose)
         trans = trans + self._origin - basis @ self._origin
         self.reset(trans, R.from_matrix(basis).as_quat(), angles)
+
+    def get_target_from_mano(self, trans, mano_pose):
+        """get target hand state from a Mano pose.
+        Arguments:
+            mano_pose {array} -- pose of the Mano model
+            trans {vec3} -- hand translation
+        """
+        angles, basis = self._model.mano_to_angles(mano_pose)
+        trans = trans + self._origin - basis @ self._origin
+        tgt_pos = trans
+        tgt_orn = R.from_matrix(basis).as_quat()
+        return tgt_pos, tgt_orn, angles
 
     def set_target_from_mano(self, trans, mano_pose):
         """Set target hand state from a Mano pose.
@@ -723,7 +750,7 @@ class HandBody:
             linkJointTypes=link_joint_types,
             linkJointAxis=link_joint_axis,
             # flags=flags,
-            physicsClientId=self.sim_cid,
+            physicsClientId=self._sim_cid,
         )
 
     def _make_collision_shape(self, link_index, basis):
@@ -735,7 +762,7 @@ class HandBody:
                     meshScale=[1.0, 1.0, 1.0],
                     collisionFramePosition=[0, 0, 0],
                     collisionFrameOrientation=R.from_matrix(basis).as_quat(),
-                    physicsClientId=self.sim_cid,
+                    physicsClientId=self._sim_cid,
                 )
         return -1
 
@@ -750,7 +777,7 @@ class HandBody:
                     specularColor=[1.0, 1.0, 1.0],
                     visualFramePosition=[0.0, 0.0, 0.0],
                     visualFrameOrientation=R.from_matrix(basis).as_quat(),
-                    physicsClientId=self.sim_cid,
+                    physicsClientId=self._sim_cid,
                 )
         return -1
 
@@ -765,7 +792,7 @@ class HandBody:
                 jointAxis=[0.0, 0.0, 0.0],
                 parentFramePosition=[0.0, 0.0, 0.0],
                 childFramePosition=[0.0, 0.0, 0.0],
-                physicsClientId=self.sim_cid,
+                physicsClientId=self._sim_cid,
             )
         return -1
 
@@ -777,7 +804,7 @@ class HandBody:
                     linkIndex=i,
                     jointLowerLimit=limits[0],
                     jointUpperLimit=limits[1],
-                    physicsClientId=self.sim_cid,
+                    physicsClientId=self._sim_cid,
                 )
 
     def _apply_dynamics(self):
@@ -787,7 +814,7 @@ class HandBody:
                 linkIndex=-1,
                 linearDamping=10.0,
                 angularDamping=10.0,
-                physicsClientId=self.sim_cid,
+                physicsClientId=self._sim_cid,
             )
 
             for i in [0] + self._joint_indices:
@@ -797,7 +824,7 @@ class HandBody:
                     restitution=0.5,
                     lateralFriction=5.0,
                     spinningFriction=5.0,
-                    physicsClientId=self.sim_cid,
+                    physicsClientId=self._sim_cid,
                 )
 
     @contextlib.contextmanager

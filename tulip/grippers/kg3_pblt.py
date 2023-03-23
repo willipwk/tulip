@@ -5,7 +5,6 @@ import os
 from typing import Tuple
 
 import numpy as np
-
 import pybullet as p
 from tulip.robots.base_robot import BaseRobot
 from tulip.utils.pblt_utils import (
@@ -90,6 +89,14 @@ class KG3:
         return self._num_joints
 
     @property
+    def base_pose(self) -> Tuple[np.ndarray, np.ndarray]:
+        """Base Cartesian pose.
+
+        Returns:
+            Base pose as (position, quaternion)."""
+        return self.get_base_pose()
+
+    @property
     def ee_pose(self) -> Tuple[np.ndarray, np.ndarray]:
         """End effector Cartesian pose.
 
@@ -134,15 +141,7 @@ class KG3:
 
         Returns:
             End effector pose as (position, quaternion)."""
-        link_info = p.getLinkState(
-            self._pid,
-            self._ee_idx,
-            # computeForwardKinematics=True,
-            physicsClientId=self._sim_cid,
-        )
-        ee_pos = np.array(link_info[0])
-        ee_quat = np.array(link_info[1])
-        return ee_pos, ee_quat
+        return self.get_link_pose(self._ee_idx)
 
     def get_joint_positions(self, joint_indices: list = None) -> np.ndarray:
         """Retrieve the current joint positions.
@@ -207,6 +206,24 @@ class KG3:
         )
         joint_torques = np.array([js[2] for js in joint_states])
         return joint_torques
+
+    def get_link_pose(self, link_idx: int) -> Tuple[np.ndarray, np.ndarray]:
+        link_info = p.getLinkState(
+            self._pid,
+            link_idx,
+            # computeForwardKinematics=True,
+            physicsClientId=self._sim_cid,
+        )
+        pos = np.array(link_info[0])
+        quat = np.array(link_info[1])
+        return pos, quat
+
+    def get_base_pose(self) -> Tuple[np.ndarray, np.ndarray]:
+        pos, quat = p.getBasePositionAndOrientation(
+            self._pid,
+            physicsClientId=self._sim_cid,
+        )
+        return np.array(pos), np.array(quat)
 
     def get_joint_limits(self) -> Tuple[Tuple[float, float]]:
         """Retrieve the joint limits as per the URDF.
