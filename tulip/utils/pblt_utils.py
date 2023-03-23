@@ -4,7 +4,6 @@ import uuid
 from typing import Any, List, Tuple
 
 import numpy as np
-
 import pybullet as p
 from tulip.utils.gl_utils import read_vertices, zbuffer_to_depth
 from tulip.utils.transform_utils import (
@@ -124,7 +123,7 @@ def vis_frame(
     pos: np.ndarray,
     quat: np.ndarray,
     sim_cid: int,
-    length: float = 0.5,
+    length: float = 0.2,
     duration: float = 15,
 ) -> None:
     """Visualize target pose frame.
@@ -354,6 +353,23 @@ def disable_collisions(obj_id: int, sim_cid: int) -> None:
     p.setCollisionFilterGroupMask(obj_id, -1, 0, 0, sim_cid)
     for link in range(p.getNumJoints(obj_id)):
         p.setCollisionFilterGroupMask(obj_id, link, 0, 0, sim_cid)
+
+
+# TODO(zyuwei) seems not working as expected
+# reference from https://github.com/bulletphysics/bullet3/issues/2094
+def disable_collisions_between_objects(
+    obj1_id: int, obj2_id: int, sim_cid: int
+) -> None:
+    """Disable collision checking in simulation between object pair.
+
+    Args:
+        obj1_id: object 1 id in simulation.
+        obj2_id: object 1 id in simulation.
+        sim_cid: PyBullet physicsClientId.
+    """
+    p.setCollisionFilterPair(
+        obj1_id, obj2_id, -1, -1, enableCollision=False, physicsClientId=sim_cid
+    )
 
 
 def save_states(instance: Any) -> int:
