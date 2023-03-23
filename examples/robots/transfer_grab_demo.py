@@ -45,10 +45,10 @@ parser.add_argument(
     help="demo npz file from GRAB dataset",
 )
 parser.add_argument(
-    "--start_idx", type=int, default=0, help="trajectory start index"
+    "--start_idx", type=int, default=45, help="trajectory start index"
 )
 parser.add_argument(
-    "--end_idx", type=int, default=167, help="trajectory end index"
+    "--end_idx", type=int, default=175, help="trajectory end index"
 )
 parser.add_argument(
     "--every_n_frame",
@@ -70,6 +70,18 @@ parser.add_argument(
 )
 parser.add_argument(
     "--ghost_hand",
+    action="store_true",
+    default=False,
+    help="Replay hand while transfering using gripper to act",
+)
+parser.add_argument(
+    "--disable_left",
+    action="store_true",
+    default=False,
+    help="Replay hand while transfering using gripper to act",
+)
+parser.add_argument(
+    "--disable_right",
     action="store_true",
     default=False,
     help="Replay hand while transfering using gripper to act",
@@ -109,6 +121,8 @@ class TransferDemo(object):
         grab_dir: str,
         demo_npz_fn: str,
         gripper_type: str = "kg3",
+        disable_left: bool = False,
+        disable_right: bool = False,
     ):
         """Initialize a pybullet simulation containing two hands for grab demo.
 
@@ -144,6 +158,12 @@ class TransferDemo(object):
         disable_collisions_between_objects(
             self.rhand._pid, self.rgripper._pid, self._sim_cid
         )
+
+        self.controllable_sides = []
+        if not disable_left:
+            self.controllable_sides.append("left")
+        if not disable_right:
+            self.controllable_sides.append("right")
 
     def init_hands(self, models_dir: str) -> None:
         self.lhand_model = HandModel45(True, models_dir)
@@ -281,7 +301,7 @@ class TransferDemo(object):
         vis_pose: bool = False,
     ) -> None:
 
-        for side in ["left", "right"]:
+        for side in self.controllable_sides:
             trans = self.demo_data[f"{side[0]}hand"]["params"]["transl"][
                 step_id
             ]
@@ -337,8 +357,12 @@ class TransferDemo(object):
         """
         if start_idx is None:
             start_idx = 0
+        else:
+            start_idx = max(0, start_idx)
         if end_idx is None:
             end_idx = self.demo_len
+        else:
+            end_idx = min(self.demo_len, end_idx)
         disable_collisions(self.lgripper._pid, self._sim_cid)
         disable_collisions(self.rgripper._pid, self._sim_cid)
 
@@ -369,7 +393,7 @@ class TransferDemo(object):
         vis_pose: bool = False,
     ) -> None:
 
-        for side in ["left", "right"]:
+        for side in self.controllable_sides:
             # parsing demo data
             trans = self.demo_data[f"{side[0]}hand"]["params"]["transl"][
                 step_id
@@ -424,8 +448,12 @@ class TransferDemo(object):
         """
         if start_idx is None:
             start_idx = 0
+        else:
+            start_idx = max(0, start_idx)
         if end_idx is None:
             end_idx = self.demo_len
+        else:
+            end_idx = min(self.demo_len, end_idx)
         disable_collisions(self.lhand._pid, self._sim_cid)
         disable_collisions(self.rhand._pid, self._sim_cid)
 
@@ -457,7 +485,12 @@ if __name__ == "__main__":
     assert os.path.isfile(args.demo_npz_fn), f"{args.grab_dir} does not exist."
 
     grab_demo = TransferDemo(
-        sim_cid, args.models_dir, args.grab_dir, args.demo_npz_fn
+        sim_cid,
+        args.models_dir,
+        args.grab_dir,
+        args.demo_npz_fn,
+        disable_left=args.disable_left,
+        disable_right=args.disable_right,
     )
 
     if args.replay_hand:
