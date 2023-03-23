@@ -90,3 +90,27 @@ def homogeneous_transform(
     t_20 = np.matmul(t_21, t_10)
     p_20 = trans2pose(t_20)
     return pose_matrix2pos_quat(p_20)
+
+
+def relative_pose(
+    c10_pos: np.ndarray,
+    c10_quat: np.ndarray,
+    c20_pos: np.ndarray,
+    c20_quat: np.ndarray,
+) -> Tuple[np.ndarray, np.ndarray]:
+    """Get relative pose of p2 wrt p1.
+
+    Args:
+        c10_pos: frame 1 position wrt c0 coordinate.
+        c10_quat: frame 1 quaternion wrt c0 coordinate.
+        c20_pos: frame 2 position wrt c0 coordinate.
+        c20_quat: frame 2 quaternion wrt c0 coordinate.
+    Returns:
+        frame2 position, quaternion wrt c1.
+    """
+    # pose of the frame to visualize
+    t_01 = pos_quat2pose_matrix(c10_pos, c10_quat)
+    t_20 = pos_quat2trans_matrix(c20_pos, c20_quat)
+    t_21 = np.matmul(t_20, t_01)
+    p_21 = trans2pose(t_21)
+    return pose_matrix2pos_quat(p_21)

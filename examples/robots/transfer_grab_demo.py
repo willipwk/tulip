@@ -19,6 +19,31 @@ from tulip.utils.pblt_utils import (
     step_sim,
     vis_frame,
 )
+from tulip.utils.transform_utils import homogeneous_transform, relative_pose
+
+
+def heuristic_mapping(
+    side, hand_base_pos, hand_base_orn, tip_local_poses, hand_q
+):
+    if side == "left":
+        coef = -1
+    else:
+        coef = 1
+    g2h_pos = np.array([0, 0, 0])
+    g2h_orn = R.from_euler("xyz", [0, 0, coef * np.pi / 5]).as_quat()
+    gripper_base_pos, gripper_base_orn = homogeneous_transform(
+        hand_base_pos, hand_base_orn, g2h_pos, g2h_orn
+    )
+
+    # 0: index -> 1: middle -> 2: ring --> 3: pinky -> 4: thumb
+    index_pos = tip_local_poses[0][0]
+    thumb_pos = tip_local_poses[-1][0]
+    dist_thumb2idx = np.linalg.norm(index_pos - thumb_pos)
+    if dist_thumb2idx <= 0.07:
+        gripper_q = np.array([0.891, 0.891, 0.891])
+    else:
+        gripper_q = np.array([0, 0, 0])
+    return gripper_base_pos, gripper_base_orn, gripper_q
 
 
 class TransferDemo(object):
@@ -104,17 +129,17 @@ class TransferDemo(object):
         duration: float = 10,
     ) -> None:
         if lh:
-            lh_pos, lh_quat = self.lhand.base_pose
-            vis_frame(lh_pos, lh_quat, self._sim_cid, duration=duration)
+            lh_pos, lh_orn = self.lhand.base_pose
+            vis_frame(lh_pos, lh_orn, self._sim_cid, duration=duration)
         if rh:
-            rh_pos, rh_quat = self.rhand.base_pose
-            vis_frame(rh_pos, rh_quat, self._sim_cid, duration=duration)
+            rh_pos, rh_orn = self.rhand.base_pose
+            vis_frame(rh_pos, rh_orn, self._sim_cid, duration=duration)
         if lg:
-            lg_pos, lg_quat = self.lgripper.base_pose
-            vis_frame(lg_pos, lg_quat, self._sim_cid, duration=duration)
+            lg_pos, lg_orn = self.lgripper.base_pose
+            vis_frame(lg_pos, lg_orn, self._sim_cid, duration=duration)
         if rg:
-            rg_pos, rg_quat = self.rgripper.base_pose
-            vis_frame(rg_pos, rg_quat, self._sim_cid, duration=duration)
+            rg_pos, rg_orn = self.rgripper.base_pose
+            vis_frame(rg_pos, rg_orn, self._sim_cid, duration=duration)
 
     def parse_demo(self, demo_npz_fn: str) -> dict:
         """Parse demo data from npz file into a dictionary data.
@@ -276,10 +301,15 @@ class TransferDemo(object):
                 self.replay_object(step_id)
             time.sleep(0.01)
 
-    # TODO: add postprocessing
     # finger tip cartesian position may help here rather than raw joint angles
-    def hand2gripper(self, hand_pos, hand_quat, h_q):
-        return hand_pos, hand_quat, np.array([0, 0, 0])
+    def hand2gripper(
+        self, side, hand_base_pos, hand_base_orn, hand_tip_poses, hand_q, method
+    ):
+        assert method in ["heuristic"], "Mapping method not supported."
+        if method == "heuristic":
+            return heuristic_mapping(
+                side, hand_base_pos, hand_base_orn, hand_tip_poses, hand_q
+            )
 
     def transfer_gripper(
         self,
@@ -288,6 +318,7 @@ class TransferDemo(object):
     ) -> None:
 
         for side in ["left", "right"]:
+            # parsing demo data
             trans = self.demo_data[f"{side[0]}hand"]["params"]["transl"][
                 step_id
             ]
@@ -299,14 +330,27 @@ class TransferDemo(object):
             ]
             mano_pose = np.concatenate([global_orn, full_pose], -1)
 
-            h_pos, h_orn, h_q = getattr(
-                self, f"{side[0]}hand"
-            ).get_target_from_mano(trans, mano_pose)
-            g_pos, g_orn, g_q = self.hand2gripper(h_pos, h_orn, h_q)
+            # extract state from hand target
+            hand = getattr(self, f"{side[0]}hand")
+            h_base_pos, h_base_orn, h_q = hand.get_target_from_mano(
+                trans, mano_pose
+            )
+            hlink_poses = hand.forward_kinematics(h_q)
+            htip_poses = [hlink_poses[idx] for idx in hand._model.tip_links]
+            # poses or just position?
+            htip_local_poses = [
+                relative_pose(h_base_pos, h_base_orn, tip_pos, tip_orn)
+                for (tip_pos, tip_orn) in htip_poses
+            ]
+            g_base_pos, g_base_orn, g_q = self.hand2gripper(
+                side, h_base_pos, h_base_orn, htip_local_poses, h_q, "heuristic"
+            )
+            # apply gripper action
             if vis_pose:
-                vis_frame(g_pos, g_orn, self._sim_cid, duration=1)
-            getattr(self, f"{side[0]}gripper").reset_base_pose(g_pos, g_orn)
-            getattr(self, f"{side[0]}gripper").set_joint_positions(g_q)
+                vis_frame(g_base_pos, g_base_orn, self._sim_cid, duration=1)
+            gripper = getattr(self, f"{side[0]}gripper")
+            gripper.reset_base_pose(g_base_pos, g_base_orn)
+            gripper.set_joint_positions(g_q)
             step_sim(4)
 
     def transfer(

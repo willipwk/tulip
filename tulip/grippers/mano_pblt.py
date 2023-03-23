@@ -11,6 +11,7 @@ from typing import Tuple
 import numpy as np
 import pybullet as p
 from scipy.spatial.transform import Rotation as R
+from tulip.utils.pblt_utils import restore_states, save_states, step_sim
 
 Joint = collections.namedtuple("Joint", ["origin", "basis", "axes", "limits"])
 
@@ -519,10 +520,12 @@ class HandBody:
         self._joint_indices = []
         self._joint_limits = []
         self._link_mapping = {}
+        self.controllable_joint_indices = []
         self._pid = self._make_body()
         self._constraint_id = self._make_constraint()
         self._apply_joint_limits()
         self._apply_dynamics()
+        self.state = {}
 
     @property
     def id(self):
@@ -531,6 +534,22 @@ class HandBody:
             int -- body unique id in PyBullet
         """
         return self._pid
+
+    @property
+    def link_names(self):
+        """Link names for the hand model.
+        Returns:
+            list of string as link names.
+        """
+        return self._model.link_names
+
+    @property
+    def num_joints(self):
+        """Number of joints for the mano hand.
+        Returns:
+            int -- number of unique joints
+        """
+        return self._num_joints
 
     @property
     def joint_indices(self):
@@ -555,6 +574,31 @@ class HandBody:
             position and quaternion of the base link.
         """
         return self.get_base_pose()
+
+    @property
+    def tip_pose(self) -> tuple:
+        """Cartesian poses of finger tips.
+        Returns:
+            Tuple of finger tip Cartesian poses as position and quaternion.
+        """
+        assert len(self._model.tip_links) == 5, "Wrong number of finger tips."
+        tip_poses = ()
+        for hand_idx in self._model.tip_links:
+            tip_pos, tip_quat = self.get_link_pose(self._link_mapping[hand_idx])
+            tip_poses += ((tip_pos, tip_quat),)
+        return tip_poses
+
+    def forward_kinematics(self, q, joint_indices: list = None) -> dict:
+        if joint_indices is None:
+            joint_indices = self.controllable_joint_indices
+        assert len(q) == len(joint_indices), "Wrong number of joint positions."
+        state_id = save_states(self)
+        self.reset_to_states(q, joint_indices=joint_indices)
+        link_poses = {}
+        for hand_idx, joint_idx in self._link_mapping.items():
+            link_poses[hand_idx] = self.get_link_pose(joint_idx)
+        restore_states(self, state_id)
+        return link_poses
 
     def get_state(self):
         """Get current hand state.
@@ -712,8 +756,9 @@ class HandBody:
                 origin_rel, basis_rel = [0.0, 0.0, 0.0], np.eye(3)
                 parent_index = len(link_masses) - 1
                 self._link_mapping[j] = parent_index
-                self._joint_indices.append(parent_index)
                 self._joint_limits.append(limits)
+                self._joint_indices.append(parent_index)
+                self.controllable_joint_indices.append(parent_index)
 
             link_masses[-1] = 0.02
             link_visual_indices[-1] = self._make_visual_shape(
@@ -722,6 +767,7 @@ class HandBody:
             link_collision_indices[-1] = self._make_collision_shape(
                 j, joints[j].basis.T
             )
+        self._num_joints = len(self._joint_indices)
 
         flags = p.URDF_INITIALIZE_SAT_FEATURES
         if self.FLAG_USE_SELF_COLLISION & self._flags:
@@ -840,3 +886,96 @@ class HandBody:
             vertices -= self._model.joints[link_index].origin
             save_mesh_obj(temp_file.name, vertices, faces)
             yield temp_file.name
+
+    def reset_to_states(self, q, dq=None, joint_indices=None):
+        if joint_indices is None:
+            joint_indices = self._controllable_joint_indices
+        assert len(q) == len(joint_indices), "Wrong joint positions given"
+        if dq is not None:
+            assert len(dq) == len(joint_indices), "Wrong joint positions given"
+        else:
+            dq = [0 for idx in joint_indices]
+        for joint_idx, joint_pos, joint_vel in zip(joint_indices, q, dq):
+            p.resetJointState(
+                self._pid,
+                jointIndex=joint_idx,
+                targetValue=joint_pos,
+                targetVelocity=joint_vel,
+                physicsClientId=self._sim_cid,
+            )
+        step_sim(1)
+
+    def get_joint_positions(self, joint_indices: list = None) -> np.ndarray:
+        """Retrieve the current joint positions.
+
+        Args:
+            joint_indices: joint_indices to query
+        Returns:
+            A fixed-length array of current joint positions."""
+        if joint_indices is None:
+            joint_indices = self.controllable_joint_indices
+        joint_states = p.getJointStates(
+            bodyUniqueId=self.id,
+            jointIndices=joint_indices,
+            physicsClientId=self._sim_cid,
+        )
+        joint_pos = np.array([js[0] for js in joint_states])
+        return joint_pos
+
+    def get_joint_velocities(self, joint_indices: list = None) -> np.ndarray:
+        """Retrieve the current joint velocities.
+
+        Args:
+            joint_indices: joint_indices to query
+        Returns:
+            A fixed-length array of current joint velocities."""
+        if joint_indices is None:
+            joint_indices = self.controllable_joint_indices
+        joint_states = p.getJointStates(
+            bodyUniqueId=self.id,
+            jointIndices=joint_indices,
+            physicsClientId=self._sim_cid,
+        )
+        joint_vel = np.array([js[1] for js in joint_states])
+        return joint_vel
+
+    def get_joint_accelerations(self, joint_indices: list = None) -> np.ndarray:
+        """Retrieve the current joint accelerations.
+
+        Args:
+            joint_indices: joint_indices to query
+        Returns:
+            A fixed-length array of current joint accelerations."""
+        raise NotImplementedError(
+            "PyBullet doesn't support direct acceleration query. You may \
+            consider to calculate via (v_(t) - v_(t-1)) / dt."
+        )
+
+    # todo(zyuwei) parsing the dof for force/torque values
+    def get_joint_torques(self, joint_indices: list = None) -> np.ndarray:
+        """Retrieve the current joint torques.
+
+        Args:
+            joint_indices: joint_indices to query
+        Returns:
+            A fixed-length array of current joint torques."""
+        if joint_indices is None:
+            joint_indices = self.controllable_joint_indices
+        joint_states = p.getJointStates(
+            bodyUniqueId=self.id,
+            jointIndices=joint_indices,
+            physicsClientId=self._sim_cid,
+        )
+        joint_torques = np.array([js[2] for js in joint_states])
+        return joint_torques
+
+    def get_link_pose(self, link_idx: int) -> Tuple[np.ndarray, np.ndarray]:
+        link_info = p.getLinkState(
+            self._pid,
+            link_idx,
+            # computeForwardKinematics=True,
+            physicsClientId=self._sim_cid,
+        )
+        pos = np.array(link_info[0])
+        quat = np.array(link_info[1])
+        return pos, quat
