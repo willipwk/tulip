@@ -1,3 +1,4 @@
+import argparse
 import inspect
 import os
 import sys
@@ -20,6 +21,60 @@ from tulip.utils.pblt_utils import (
     vis_frame,
 )
 from tulip.utils.transform_utils import homogeneous_transform, relative_pose
+
+parser = argparse.ArgumentParser(description="Grab demo  transfer argparsing")
+parser.add_argument(
+    "--mano_models_dir",
+    dest="models_dir",
+    type=str,
+    default="/home/zyuwei/tulip/data/mano_v1_2/models/",
+    help="mano model files from https://mano.is.tue.mpg.de",
+)
+parser.add_argument(
+    "--grab_data_dir",
+    dest="grab_dir",
+    type=str,
+    default="/home/zyuwei/tulip/grab_data",
+    help="grab data from https://grab.is.tue.mpg.de/",
+)
+parser.add_argument(
+    "--demo_fn",
+    dest="demo_npz_fn",
+    type=str,
+    default="/home/zyuwei/data/grab_data/grab/s1/waterbottle_drink_1.npz",
+    help="demo npz file from GRAB dataset",
+)
+parser.add_argument(
+    "--start_idx", type=int, default=0, help="trajectory start index"
+)
+parser.add_argument(
+    "--end_idx", type=int, default=167, help="trajectory end index"
+)
+parser.add_argument(
+    "--every_n_frame",
+    type=int,
+    default=1,
+    help="use 1 out of every n steps trajectory",
+)
+parser.add_argument(
+    "--replay_hand",
+    action="store_true",
+    default=False,
+    help="Replay hand trajectory",
+)
+parser.add_argument(
+    "--replay_object",
+    action="store_true",
+    default=False,
+    help="Replay object pose rather than phyiscs simulation",
+)
+parser.add_argument(
+    "--ghost_hand",
+    action="store_true",
+    default=False,
+    help="Replay hand while transfering using gripper to act",
+)
+args = parser.parse_args()
 
 
 def heuristic_mapping(
@@ -284,20 +339,17 @@ class TransferDemo(object):
             start_idx = 0
         if end_idx is None:
             end_idx = self.demo_len
+        disable_collisions(self.lgripper._pid, self._sim_cid)
+        disable_collisions(self.rgripper._pid, self._sim_cid)
 
         for step_id in tqdm(range(start_idx, end_idx, every_n_frame)):
             if step_id == start_idx:
                 self.init_scene(step_id)
+                if replay_object:
+                    disable_collisions(self.lhand._pid, self._sim_cid)
+                    disable_collisions(self.rhand._pid, self._sim_cid)
             self.replay_hand(step_id)
             if replay_object:
-                if step_id == start_idx:
-                    disable_collisions_between_objects(
-                        self.lhand._pid, self.obj_id, self._sim_cid
-                    )
-                    disable_collisions_between_objects(
-                        self.rhand._pid, self.obj_id, self._sim_cid
-                    )
-
                 self.replay_object(step_id)
             time.sleep(0.01)
 
@@ -358,7 +410,8 @@ class TransferDemo(object):
         start_idx: int = None,
         end_idx: int = None,
         every_n_frame: int = 1,
-        replay_object: bool = True,
+        replay_object: bool = False,
+        ghost_hand: bool = False,
     ) -> None:
         """Replay recorded demo data in simulation.
 
@@ -373,33 +426,21 @@ class TransferDemo(object):
             start_idx = 0
         if end_idx is None:
             end_idx = self.demo_len
+        disable_collisions(self.lhand._pid, self._sim_cid)
+        disable_collisions(self.rhand._pid, self._sim_cid)
 
         for step_id in tqdm(range(start_idx, end_idx, every_n_frame)):
+
             if step_id == start_idx:
                 self.init_scene(step_id)
-            self.transfer_gripper(step_id)
-            self.replay_hand(step_id)
-            if replay_object:
-                if step_id == start_idx:
-                    """
-                    disable_collisions_between_objects(
-                        self.lhand._pid, self.obj_id, self._sim_cid
-                    )
-                    disable_collisions_between_objects(
-                        self.lgripper._pid, self.obj_id, self._sim_cid
-                    )
-                    disable_collisions_between_objects(
-                        self.rhand._pid, self.obj_id, self._sim_cid
-                    )
-                    disable_collisions_between_objects(
-                        self.rgripper._pid, self.obj_id, self._sim_cid
-                    )
-                    """
-                    disable_collisions(self.lhand._pid, self._sim_cid)
-                    disable_collisions(self.rhand._pid, self._sim_cid)
+                if replay_object:
                     disable_collisions(self.lgripper._pid, self._sim_cid)
                     disable_collisions(self.rgripper._pid, self._sim_cid)
 
+            self.transfer_gripper(step_id)
+            if ghost_hand:
+                self.replay_hand(step_id)
+            if replay_object:
                 self.replay_object(step_id)
             time.sleep(0.01)
 
@@ -408,12 +449,29 @@ if __name__ == "__main__":
 
     sim_cid = init_sim()
 
-    models_dir = "/home/zyuwei/tulip/data/mano_v1_2/models/"
-    grab_dir = "/home/zyuwei/tulip/grab_data"
-    demo_npz_fn = sys.argv[1]
-    grab_demo = TransferDemo(sim_cid, models_dir, grab_dir, demo_npz_fn)
-    replay = False
-    if replay:
-        grab_demo.replay(replay_object=(int(sys.argv[2]) == 1))
+    assert os.path.isdir(args.models_dir), f"{args.models_dir} does not exist."
+    assert os.path.isdir(args.grab_dir), f"{args.grab_dir} does not exist."
+    assert os.path.isdir(
+        f"{args.grab_dir}/tools/object_meshes"
+    ), f"object meshes does not exist in {args.grab_dir}."
+    assert os.path.isfile(args.demo_npz_fn), f"{args.grab_dir} does not exist."
+
+    grab_demo = TransferDemo(
+        sim_cid, args.models_dir, args.grab_dir, args.demo_npz_fn
+    )
+
+    if args.replay_hand:
+        grab_demo.replay(
+            start_idx=args.start_idx,
+            end_idx=args.end_idx,
+            every_n_frame=args.every_n_frame,
+            replay_object=args.replay_object,
+        )
     else:
-        grab_demo.transfer(replay_object=(int(sys.argv[2]) == 1))
+        grab_demo.transfer(
+            start_idx=args.start_idx,
+            end_idx=args.end_idx,
+            every_n_frame=args.every_n_frame,
+            replay_object=args.replay_object,
+            ghost_hand=args.ghost_hand,
+        )
