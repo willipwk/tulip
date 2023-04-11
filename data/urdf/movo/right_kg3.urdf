@@ -34,7 +34,7 @@
     </visual>
     <collision>
       <geometry>
-        <mesh filename="movo_description/meshes/manipulation/kinova_grippers/collision/kg3_base_link.stl"/>
+        <mesh filename="movo_description/meshes/manipulation/kinova_grippers/collision/kg3_base_link_simplified_collision.obj"/>
       </geometry>
     </collision>
     <inertial>
@@ -58,7 +58,7 @@
     </visual>
     <collision>
       <geometry>
-        <mesh filename="movo_description/meshes/manipulation/kinova_grippers/collision/finger_knuckle.stl"/>
+        <mesh filename="movo_description/meshes/manipulation/kinova_grippers/collision/finger_knuckle_simplified_collision.obj"/>
       </geometry>
     </collision>
     <inertial>
@@ -83,7 +83,7 @@
     </visual>
     <collision>
       <geometry>
-        <mesh filename="movo_description/meshes/manipulation/kinova_grippers/collision/finger_knuckle.stl"/>
+        <mesh filename="movo_description/meshes/manipulation/kinova_grippers/collision/finger_knuckle_simplified_collision.obj"/>
       </geometry>
     </collision>
     <inertial>
@@ -108,7 +108,7 @@
     </visual>
     <collision>
       <geometry>
-        <mesh filename="movo_description/meshes/manipulation/kinova_grippers/collision/finger_knuckle.stl"/>
+        <mesh filename="movo_description/meshes/manipulation/kinova_grippers/collision/finger_knuckle_simplified_collision.obj"/>
       </geometry>
     </collision>
     <inertial>
@@ -130,7 +130,7 @@
     </visual>
     <collision>
       <geometry>
-        <mesh filename="movo_description/meshes/manipulation/kinova_grippers/collision/finger_tip.stl"/>
+        <mesh filename="movo_description/meshes/manipulation/kinova_grippers/collision/finger_tip_simplified_collision.obj"/>
       </geometry>
     </collision>
     <inertial>
@@ -152,7 +152,7 @@
     </visual>
     <collision>
       <geometry>
-        <mesh filename="movo_description/meshes/manipulation/kinova_grippers/collision/finger_tip.stl"/>
+        <mesh filename="movo_description/meshes/manipulation/kinova_grippers/collision/finger_tip_simplified_collision.obj"/>
       </geometry>
     </collision>
     <inertial>
@@ -174,7 +174,7 @@
     </visual>
     <collision>
       <geometry>
-        <mesh filename="movo_description/meshes/manipulation/kinova_grippers/collision/finger_tip.stl"/>
+        <mesh filename="movo_description/meshes/manipulation/kinova_grippers/collision/finger_tip_simplified_collision.obj"/>
       </geometry>
     </collision>
     <inertial>
