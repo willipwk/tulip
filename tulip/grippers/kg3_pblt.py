@@ -1,6 +1,6 @@
 """Franka Panda interface for PyBullet."""
-
 import logging
+import math
 import os
 from typing import Tuple
 
@@ -89,12 +89,25 @@ class KG3:
         return self._num_joints
 
     @property
+    def tip_links(self) -> list:
+        return [6, 9, 12]
+
+    @property
     def base_pose(self) -> Tuple[np.ndarray, np.ndarray]:
         """Base Cartesian pose.
 
         Returns:
             Base pose as (position, quaternion)."""
         return self.get_base_pose()
+
+    @property
+    def tip_pose(self) -> tuple:
+        assert len(self.tip_links) == 3, "Wrong number of finger tips."
+        tip_poses = ()
+        for link_idx in self.tip_links:
+            tip_pos, tip_quat = self.get_link_pose(link_idx)
+            tip_poses += ((tip_pos, tip_quat),)
+        return tip_poses
 
     @property
     def ee_pose(self) -> Tuple[np.ndarray, np.ndarray]:
@@ -232,36 +245,40 @@ class KG3:
             A tuple of joint limit tuples as (lower_limit, upper_limit)."""
         return self.joint_limits
 
-    def fk(self, q: np.ndarray) -> Tuple[np.ndarray]:
+    def fk(self, q: np.ndarray) -> float:
         """Forward kinematics given input joint positions.
 
         Args:
             q: input joint positions.
         Returns:
-            end effector pose as (position, quaternion)."""
-        raise NotImplementedError("Method is not defined!")
+            float: open distance between two fingers in meter
+        """
+        l1 = 30.9476 - 87.0932 * math.sin(q[0] - 0.627445866)
+        l2 = 30.9476 - 87.0932 * math.sin(q[1] - 0.627445866)
+        dist = l1 + l2
+        if dist < (2 * 30.9476):
+            dist -= 17.0
+        else:
+            dist += 1.08
 
-    def ik(
-        self,
-        pos: np.ndarray,
-        orn: np.ndarray,
-        q_init: np.ndarray,
-        n_samples: int,
-        tolerance: float,
-    ) -> np.ndarray:
-        """Inverse kinematics given target end effector pose.
+        return dist * 0.001
+
+    def ik(self, dist: float) -> np.ndarray:
+        """Inverse kinematics given target open distance.
 
         Args:
-            pos: Cartesian position.
-            orn: Cartesian orientation in quaternion.
-            q_init: joint configuration seed.
-            n_samples: number of samples to sample solution.
-            tolerance: minimum position distance error for solution.
+            dist: open distance between two fingers in meter
         Returns:
-            joint configurations that satisfies the target Cartesian pose. None
-            will be return if there is no solution satisfies the distance
-            tolerance after n_samples being sampled."""
-        raise NotImplementedError("Method is not defined!")
+            joint angles for three fingers in radian."""
+        dist_mm = dist * 1000.0
+        tmp = (0.5 * dist_mm - 30.9476) / -87.0932
+        q = math.asin(tmp) + 0.627445866
+        if 0.5 * dist > 30.9476:
+            q += 0.00599
+        else:
+            q -= 0.1
+
+        return np.array([q, q, q])
 
     # todo(zyuwei) to check if how gains are used in different control modes
     def set_joint_positions(
