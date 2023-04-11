@@ -2,6 +2,7 @@ import os
 
 import pybullet as p
 import pymeshlab
+import trimesh
 
 
 def convert_to_wavefront(in_fn: str, obj_fn=None) -> str:
@@ -53,12 +54,21 @@ def convex_decompose(
         assert os.path.isfile(out_fn), "VHACD failed to generate output."
 
 
+def get_center_of_mass(filename):
+    mesh = trimesh.load(filename)
+    if isinstance(mesh, trimesh.Scene):
+        return mesh.centroid
+    else:
+        return mesh.center_mass
+
+
 def create_urdf_from_mesh(
     mesh_fn: str,
     urdf_fn: str,
     collision_fn: str = None,
     mass: float = 0.1,
     mu: float = 0.1,
+    com: list = None,
     scale: list = [1, 1, 1],
     rgba: list = [1, 1, 1, 1],
 ) -> None:
@@ -79,18 +89,25 @@ def create_urdf_from_mesh(
     gen_collision_fn = not os.path.isfile(collision_fn)
     if gen_collision_fn:
         convex_decompose(mesh_fn, collision_fn)
+    if com is None:
+        com = get_center_of_mass(mesh_fn)
     with open(urdf_fn, "w") as fp:
         fp.write(
-            """xml version="1.0" ?>
+            """<?xml version="1.0" ?>
 <robot name="object.urdf">
   <link name="baseLink">
+    <!--contact>
+        <lateral_friction value="{10}" />
+        <rolling_friction value="0.2" />
+        <spinning_friction value="0.2" />
+    </contact-->
     <inertial>
       <origin rpy="0 0 0" xyz="0 0 0"/>
        <mass value="{1}"/>
        <inertia ixx="0" ixy="0" ixz="0" iyy="0" iyz="0" izz="0"/>
     </inertial>
     <visual>
-      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <origin rpy="{11} {12} {13}" xyz="0 0 0"/>
       <geometry>
         <mesh filename="{0}" scale="{2} {3} {4}"/>
       </geometry>
@@ -99,8 +116,7 @@ def create_urdf_from_mesh(
       </material>
     </visual>
     <collision>
-      <origin rpy="0 0 0" xyz="0 0 0"/>
-      <contact_coefficients mu="{10}" />
+      <origin rpy="{11} {12} {13}" xyz="0 0 0"/>
      <geometry>
         <mesh filename="{9}" scale="{2} {3} {4}"/>
       </geometry>
@@ -118,6 +134,9 @@ def create_urdf_from_mesh(
                 rgba[3],
                 collision_fn,
                 mu,
+                com[0],
+                com[1],
+                com[2],
             )
         )
     return
