@@ -58,6 +58,7 @@ def create_urdf_from_mesh(
     urdf_fn: str,
     collision_fn: str = None,
     mass: float = 0.1,
+    mu: float = 0.1,
     scale: list = [1, 1, 1],
     rgba: list = [1, 1, 1, 1],
 ) -> None:
@@ -99,6 +100,7 @@ def create_urdf_from_mesh(
     </visual>
     <collision>
       <origin rpy="0 0 0" xyz="0 0 0"/>
+      <contact_coefficients mu="{10}" />
      <geometry>
         <mesh filename="{9}" scale="{2} {3} {4}"/>
       </geometry>
@@ -115,6 +117,7 @@ def create_urdf_from_mesh(
                 rgba[2],
                 rgba[3],
                 collision_fn,
+                mu,
             )
         )
     return
