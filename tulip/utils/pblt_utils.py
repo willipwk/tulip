@@ -47,11 +47,12 @@ def init_sim(**kwargs) -> int:
             sim_cid = p.connect(p.TCP, host_ip, port_num)
     assert sim_cid >= 0, "Failed to create a pybullet client"
 
+    p.resetSimulation(physicsClientId=sim_cid)
     timestep = kwargs.get("timestep", PBLT_TIMESTEP)
-    p.setTimeStep(timestep)
+    p.setTimeStep(timestep, physicsClientId=sim_cid)
 
     gravity_coef = kwargs.get("gravity_coef", -9.8)
-    p.setGravity(0, 0, gravity_coef)
+    p.setGravity(0, 0, gravity_coef, physicsClientId=sim_cid)
 
     return sim_cid
 
