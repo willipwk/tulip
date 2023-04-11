@@ -6,18 +6,21 @@ import time
 
 import gym
 import numpy as np
+import pybullet as p
 import pybullet_data
+import tulip
 from scipy.spatial.transform import Rotation as R
 from tqdm import tqdm
-
-import pybullet as p
-import tulip
 from tulip.grippers.kg3_pblt import KG3
 from tulip.grippers.mano_pblt import HandBody, HandModel45
 from tulip.utils.mesh_utils import create_urdf_from_mesh
-from tulip.utils.pblt_utils import (disable_collisions,
-                                    disable_collisions_between_objects,
-                                    init_sim, step_sim, vis_frame)
+from tulip.utils.pblt_utils import (
+    disable_collisions,
+    disable_collisions_between_objects,
+    init_sim,
+    step_sim,
+    vis_frame,
+)
 from tulip.utils.transform_utils import homogeneous_transform, relative_pose
 
 parser = argparse.ArgumentParser(description="Grab demo  transfer argparsing")
@@ -95,7 +98,9 @@ def heuristic_mapping(
     else:
         coef = 1
     g2h_pos = np.array([0, 0, 0])
-    g2h_orn = R.from_euler("xyz", [- coef * np.pi / 5, 0, coef * np.pi / 5]).as_quat()
+    g2h_orn = R.from_euler(
+        "xyz", [-coef * np.pi / 5, 0, coef * np.pi / 5]
+    ).as_quat()
     gripper_wrist_pos, gripper_wrist_orn = homogeneous_transform(
         hand_wrist_pos, hand_wrist_orn, g2h_pos, g2h_orn
     )
@@ -108,7 +113,7 @@ def heuristic_mapping(
     return gripper_wrist_pos, gripper_wrist_orn, gripper_q
 
 
-class TransferDemoEnv(object):
+class TransferDemoEnv(gym.Env):
     def __init__(
         self,
         sim_cid: int,
@@ -159,6 +164,9 @@ class TransferDemoEnv(object):
             self.controllable_sides.append("left")
         if not disable_right:
             self.controllable_sides.append("right")
+
+    def seed(self, seed):
+        np.random.seed(seed)
 
     def init_hands(self, models_dir: str) -> None:
         self.lhand_model = HandModel45(True, models_dir)
@@ -231,17 +239,21 @@ class TransferDemoEnv(object):
             f"{pybullet_data.getDataPath()}/plane.urdf",
             physicsClientId=self._sim_cid,
         )
-        table_collision_fn = (".".join(
-            f'{self.grab_dir}/{self.demo_data["table"]["table_mesh"]}'.split(
-                "."
-            )[
-                :-1
-            ]
-        ) + "_coacd.obj")
+        table_collision_fn = (
+            ".".join(
+                f'{self.grab_dir}/{self.demo_data["table"]["table_mesh"]}'.split(
+                    "."
+                )[
+                    :-1
+                ]
+            )
+            + "_coacd.obj"
+        )
         create_urdf_from_mesh(
             f'{self.grab_dir}/{self.demo_data["table"]["table_mesh"]}',
             "table.urdf",
             collision_fn=table_collision_fn,
+            mu=0.9,
         )
         table_pos = self.demo_data["table"]["params"]["transl"][step_id]
         table_orn = self.demo_data["table"]["params"]["global_orient"][step_id]
@@ -259,18 +271,22 @@ class TransferDemoEnv(object):
         step_sim()
         os.system("rm table.urdf")
 
-        obj_collision_fn = (".".join(
-            f'{self.grab_dir}/{self.demo_data["object"]["object_mesh"]}'.split(
-                "."
-            )[
-                :-1
-            ]
-        ) + "_coacd.obj")
+        obj_collision_fn = (
+            ".".join(
+                f'{self.grab_dir}/{self.demo_data["object"]["object_mesh"]}'.split(
+                    "."
+                )[
+                    :-1
+                ]
+            )
+            + "_coacd.obj"
+        )
         create_urdf_from_mesh(
             f'{self.grab_dir}/{self.demo_data["object"]["object_mesh"]}',
             "obj.urdf",
             collision_fn=obj_collision_fn,
-            mass=0.02,
+            mass=0.2,
+            mu=0.9,
             scale=[1.0, 1.0, 1.0],
             rgba=[1, 1, 0, 1],
         )
@@ -380,11 +396,14 @@ class TransferDemoEnv(object):
         hand_q,
         method,
         delta_action,
-        pos_dilation=0.02,
-        orn_dilation=0.4,
+        pos_dilation=0.03,
+        orn_dilation=0.3,
         ang_dilation=0.4,
     ):
-        assert method in ["heuristic", "residual"], "Unsupported mapping method."
+        assert method in [
+            "heuristic",
+            "residual",
+        ], "Unsupported mapping method."
         if method == "heuristic":
             return heuristic_mapping(
                 side,
@@ -392,7 +411,7 @@ class TransferDemoEnv(object):
                 hand_wrist_pos,
                 hand_wrist_orn,
                 hand_tip_poses,
-                hand_q
+                hand_q,
             )
         elif method == "residual":
             base_pos, base_quat, base_q = heuristic_mapping(
@@ -401,26 +420,28 @@ class TransferDemoEnv(object):
                 hand_wrist_pos,
                 hand_wrist_orn,
                 hand_tip_poses,
-                hand_q
+                hand_q,
             )
-            base_orn = R.from_quat(base_quat).as_euler('xyz')
+            base_orn = R.from_quat(base_quat).as_euler("xyz")
             delta_pos = pos_dilation * delta_action[..., 0:3]
             delta_orn = orn_dilation * delta_action[..., 3:6]
             delta_orn[1:] /= 2
             delta_q = ang_dilation * np.array([delta_action[..., 6]] * 3)
             pos = base_pos + delta_pos
             orn = base_orn + delta_orn
-            quat = R.from_euler('xyz', orn).as_quat()
+            quat = R.from_euler("xyz", orn).as_quat()
             q = base_q + delta_q
             for i, q_value in enumerate(q):
-                q[i] = min(max(gripper.joint_limits[i][0], q_value),
-                           gripper.joint_limits[i][1])
+                q[i] = min(
+                    max(gripper.joint_limits[i][0], q_value),
+                    gripper.joint_limits[i][1],
+                )
             return pos, quat, q
 
     def transfer_gripper(
         self,
         step_id: int,
-        method: str = 'heuristic',
+        method: str = "heuristic",
         delta_action: np.array = None,
         controllable_sides: list = None,
         vis_pose: bool = False,
@@ -463,7 +484,7 @@ class TransferDemoEnv(object):
                 htip_local_poses,
                 h_q,
                 method,
-                delta_action=delta_action
+                delta_action=delta_action,
             )
             # apply gripper action
             if vis_pose:
@@ -517,16 +538,17 @@ class TransferDemoEnv(object):
                 self.replay_object(step_id)
             time.sleep(0.01)
 
-
     def init_rl_env(
-        self, start_idx: int, end_idx: int, ghost_hand: bool
+        self, start_idx: int, end_idx: int, every_n_frame: int, ghost_hand: bool
     ) -> None:
         # setup trajectory horizon
         assert len(self.controllable_sides) == 1, "Only single hand control."
         self.action_side = self.controllable_sides[0]
 
+        self.episode_idx = -1
         self.start_idx = start_idx
         self.end_idx = end_idx
+        self.every_n_frame = every_n_frame
         self.init_scene(self.start_idx)
 
         # setup target goal
@@ -544,10 +566,10 @@ class TransferDemoEnv(object):
 
         # setup observation and action space
         self._observation_space = gym.spaces.Box(
-            -np.inf, np.inf, shape=(56,), dtype='float32'
+            -np.inf, np.inf, shape=(62,), dtype="float32"
         )  # base_pose, tip_pose * 3, keyframe_pose_diff * 4,  obj2ee_pose, q, t
         self._action_space = gym.spaces.Box(
-            -1, 1, shape=(7,), dtype='float32'
+            -1, 1, shape=(7,), dtype="float32"
         )  # d_pos, d_orn, d_q
 
     @property
@@ -557,6 +579,35 @@ class TransferDemoEnv(object):
     @property
     def observation_space(self) -> gym.spaces.Box:
         return self._observation_space
+
+    def get_obj2ee_pose(self, gripper, euler_orn=False):
+        # object to ee pose
+        ee_pos, ee_quat = gripper.ee_pose
+        obj_pos, obj_quat = p.getBasePositionAndOrientation(
+            self.obj_id, physicsClientId=self._sim_cid
+        )
+        obj2ee_pos = (np.array(obj_pos) - ee_pos).tolist()
+        obj2ee_orn = (
+            R.from_quat(obj_quat).as_euler("xyz")
+            - R.from_quat(ee_quat).as_euler("xyz")
+        ).tolist()
+        if not euler_orn:
+            obj2ee_orn = R.from_euler("xyz", obj2ee_orn).as_quat().tolist()
+        return obj2ee_pos, obj2ee_orn
+
+    def get_obj2goal_pose(self, euler_orn=False):
+        # object to ee pose
+        obj_pos, obj_quat = p.getBasePositionAndOrientation(
+            self.obj_id, physicsClientId=self._sim_cid
+        )
+        obj2goal_pos = (np.array(obj_pos) - self.obj_goal_pos).tolist()
+        obj2goal_orn = (
+            R.from_quat(obj_quat).as_euler("xyz")
+            - R.from_euler("xyz", self.obj_goal_orn).as_euler("xyz")
+        ).tolist()
+        if not euler_orn:
+            obj2goal_orn = R.from_euler("xyz", obj2goal_orn).as_quat().tolist()
+        return obj2goal_pos, obj2goal_orn
 
     def get_observation(self) -> np.array:
         """
@@ -571,7 +622,7 @@ class TransferDemoEnv(object):
         h_wrist_pos = list(h_wrist_pos)
         h_wrist_orn = R.from_quat(h_wrist_quat).as_euler("xyz").tolist()
         h_tip_poses = [
-            [list(p), list(R.from_quat(q).as_euler('xyz'))]
+            [list(p), list(R.from_quat(q).as_euler("xyz"))]
             for p, q in hand.tip_pose
         ]
         # h_q = hand.get_joint_positions().tolist()
@@ -582,32 +633,29 @@ class TransferDemoEnv(object):
         g_wrist_pos = list(g_wrist_pos)
         g_wrist_orn = R.from_quat(g_wrist_quat).as_euler("xyz").tolist()
         g_tip_poses = [
-            [list(p), list(R.from_quat(q).as_euler('xyz'))]
+            [list(p), list(R.from_quat(q).as_euler("xyz"))]
             for p, q in gripper.tip_pose
         ]
         g_q = gripper.get_joint_positions().mean()
 
         # keyframe pose differences
-        poses_diff = [[
-            [h_p - g_p for h_p, g_p in zip(h_wrist_pos, g_wrist_pos)],
-            [h_o - g_o for h_o, g_o in zip(h_wrist_orn, g_wrist_orn)]
-        ]]
+        poses_diff = [
+            [
+                [h_p - g_p for h_p, g_p in zip(h_wrist_pos, g_wrist_pos)],
+                [h_o - g_o for h_o, g_o in zip(h_wrist_orn, g_wrist_orn)],
+            ]
+        ]
         for h_i, g_i in ((4, 0), (0, 2), (1, 1)):
             h_pos, h_orn = h_tip_poses[h_i]
             g_pos, g_orn = g_tip_poses[g_i]
-            poses_diff.append([
-                [h_p - g_p for h_p, g_p in zip(h_pos, g_pos)],
-                [h_o - g_o for h_o, g_o in zip(h_orn, g_orn)]
-            ])
-
-        # object to ee pose
-        ee_pos, ee_quat = gripper.ee_pose
-        obj_pos, obj_quat = p.getBasePositionAndOrientation(
-            self.obj_id,
-            physicsClientId=self._sim_cid)
-        obj2ee_pos = (np.array(obj_pos) - ee_pos).tolist()
-        obj2ee_orn = (R.from_quat(obj_quat).as_euler('xyz') - R.from_quat(
-            ee_quat).as_euler('xyz')).tolist()
+            poses_diff.append(
+                [
+                    [h_p - g_p for h_p, g_p in zip(h_pos, g_pos)],
+                    [h_o - g_o for h_o, g_o in zip(h_orn, g_orn)],
+                ]
+            )
+        obj2ee_pos, obj2ee_orn = self.get_obj2ee_pose(gripper, euler_orn=True)
+        obj2goal_pos, obj2goal_orn = self.get_obj2goal_pose(euler_orn=True)
 
         # aggregate observations
         # obs_dim = 6 + 6 * 3 + 6 * 4 + 3 = 6 * 8 + 3 + 1 = 52
@@ -616,7 +664,8 @@ class TransferDemoEnv(object):
             obs += tip_pos + tip_orn
         for diff_pos, diff_orn in poses_diff:
             obs += diff_pos + diff_orn
-        obs += obj2ee_pos + obj2ee_orn + [g_q] + [self.step_idx]
+        obs += obj2ee_pos + obj2ee_orn + obj2goal_pos + obj2goal_orn
+        obs += [g_q] + [self.step_idx]
         return np.array(obs)
 
     def reset(self) -> np.ndarray:
@@ -628,7 +677,7 @@ class TransferDemoEnv(object):
         # reset object
         obj_pos = self.demo_data["object"]["params"]["transl"][self.start_idx]
         rand_offset = np.random.uniform(-0.0, 0.0, 3)
-        #rand_offset = np.random.uniform(-0.03, 0.03, 3)
+        # rand_offset = np.random.uniform(-0.03, 0.03, 3)
         rand_offset[2] = 0
         obj_pos += rand_offset
         obj_orn = self.demo_data["object"]["params"]["global_orient"][
@@ -642,6 +691,8 @@ class TransferDemoEnv(object):
         )
 
         # reset step
+        self.episode_idx += 1
+        self.ep_rewards = []
         self.demo_traj = []
         self.exec_traj = []
         self.step_idx = self.start_idx
@@ -663,43 +714,41 @@ class TransferDemoEnv(object):
             )
         )
 
-        # retrieve obejct state and distance to the goal
-        obj_pos, _ = p.getBasePositionAndOrientation(
-            self.obj_id,
-            physicsClientId=self._sim_cid)
-        dist = np.linalg.norm(np.array(obj_pos) - np.array(self.obj_goal_pos))
-        done = self.is_terminated(dist)
-
         # retrieve observation
         obs = self.get_observation()
 
-        # calculate trajectory deviation
+        # reward shaping
+        obj2ee_dist = np.linalg.norm(obs[-14:-11])
+        """
         self.exec_traj.append(obs[:3])
         traj_diff_dist = [
-            np.linalg.norm(
-                d_pos - e_pos
-            ) for (d_pos, e_pos) in zip(self.demo_traj, self.exec_traj)]
+            np.linalg.norm(d_pos - e_pos)
+            for (d_pos, e_pos) in zip(self.demo_traj, self.exec_traj)
+        ]
         traj_diff_dist = sum(traj_diff_dist) / len(traj_diff_dist)
+        """
+        reward = -(obj2ee_dist)  # + (-traj_diff_dist)
+        self.ep_rewards.append(reward)
 
-        # reward shaping
-        reward = (-dist) + 5 * (-traj_diff_dist)
-        time_penalty = 0.002 * (self.step_idx - self.start_idx + 1)
-        reward -= time_penalty
+        # check termination
+        done = self.is_terminated()
 
         # update step
-        self.step_idx += 1
+        self.step_idx += self.every_n_frame
 
         return obs, reward, done, {}
 
-    def is_terminated(self, dist, dist_thre=0.02):
-        if (dist <= dist_thre) or (self.step_idx > self.end_idx):
+    def is_terminated(self):
+        if self.step_idx > self.end_idx:
             return True
         else:
             return False
 
+    def render(self):
+        pass
+
     def close(self):
         p.disconnect(physicsClientId=self._sim_cid)
-
 
 
 if __name__ == "__main__":
