@@ -22,7 +22,7 @@ from transfer_grab_demo import TransferDemoEnv
 def parse_args():
     # fmt: off
     parser = argparse.ArgumentParser()
-    parser.add_argument("--exp-name", type=str, default=os.path.basename(__file__).rstrip(".py"),
+    parser.add_argument("--exp-name", type=str, default="mug", #os.path.basename(__file__).rstrip(".py"),
         help="the name of this experiment")
     parser.add_argument("--seed", type=int, default=1,
         help="seed of the experiment")
@@ -246,13 +246,16 @@ if __name__ == "__main__":
                     for _ in range(envs.num_envs)
                 ]
             )
-            """
             obj2ee_dist = np.linalg.norm(obs[..., -14:-11], axis=-1)
+            if obj2ee_dist <= 0.04:
+                # heuristic
+                if np.random.uniform(0, 1) < 0.9:
+                    actions[..., -1].fill(1)
+            else:
+                if np.random.uniform(0, 1) < 0.4:
+                    actions.fill(0)
             mask = (obj2ee_dist <= 0.04) + ((-1) * (obj2ee_dist > 0.04))
             actions[..., -1] = mask * abs(actions[..., -1])
-            """
-            if np.random.uniform(0, 1) < 0.4:
-                actions.fill(0)
         else:
             with torch.no_grad():
                 actions = actor(torch.Tensor(obs).to(device))

@@ -189,12 +189,14 @@ class TransferDemoEnv(gym.Env):
                 base_pos=[0.15, 0, 1.0],
                 base_orn=[0, 0, 0, 1],
             )
+            step_sim(500)
             self.rgripper = KG3(
                 self._sim_cid,
                 urdf_file=f"{urdf_dir}/right_kg3.urdf",
                 base_pos=[-0.15, 0, 1.0],
                 base_orn=[0, 0, 0, 1],
             )
+            step_sim(500)
         else:
             print("Gripper type not supported.")
 
@@ -282,12 +284,14 @@ class TransferDemoEnv(gym.Env):
             + "_coacd.obj"
         )
         create_urdf_from_mesh(
-            f'{self.grab_dir}/{self.demo_data["object"]["object_mesh"]}',
+            # f'{self.grab_dir}/{self.demo_data["object"]["object_mesh"]}',
+            f'{self.grab_dir}/{self.demo_data["object"]["object_mesh"].replace("waterbottle.ply", "mug.ply")}',
             "obj.urdf",
             collision_fn=obj_collision_fn,
-            mass=0.2,
-            mu=0.9,
-            scale=[1.0, 1.0, 1.0],
+            mass=0.02,
+            mu=0.5,
+            # scale=[1.0, 1.0, 1.0],
+            scale=[0.7, 0.7, 1.0],
             rgba=[1, 1, 0, 1],
         )
         obj_pos = self.demo_data["object"]["params"]["transl"][step_id]
@@ -296,10 +300,23 @@ class TransferDemoEnv(gym.Env):
             "obj.urdf",
             obj_pos,
             p.getQuaternionFromEuler(obj_orn),
-            useFixedBase=False,
             # globalScaling=0.8,
             physicsClientId=self._sim_cid,
         )
+        p.changeDynamics(
+            self.table_id, -1, lateralFriction=1, physicsClientId=self._sim_cid
+        )
+        p.changeDynamics(
+            self.obj_id, -1, lateralFriction=1, physicsClientId=self._sim_cid
+        )
+        for gripper in [self.lgripper, self.rgripper]:
+            for link_id in gripper.tip_links:
+                p.changeDynamics(
+                    gripper.id,
+                    -1,
+                    lateralFriction=1,
+                    physicsClientId=self._sim_cid,
+                )
         step_sim()
         os.system("rm obj.urdf")
 
@@ -396,8 +413,8 @@ class TransferDemoEnv(gym.Env):
         hand_q,
         method,
         delta_action,
-        pos_dilation=0.03,
-        orn_dilation=0.3,
+        pos_dilation=0.02,
+        orn_dilation=0.2,
         ang_dilation=0.4,
     ):
         assert method in [
@@ -489,9 +506,10 @@ class TransferDemoEnv(gym.Env):
             # apply gripper action
             if vis_pose:
                 vis_frame(g_wrist_pos, g_wrist_orn, self._sim_cid, duration=1)
-            gripper.reset_base_pose(g_wrist_pos, g_wrist_orn)
-            gripper.set_joint_positions(g_q)
-            step_sim(4)
+            for _ in range(5):
+                gripper.control_base_pose(g_wrist_pos, g_wrist_orn)
+                gripper.set_joint_positions(g_q)
+                step_sim(4)
         return h_wrist_pos
 
     def transfer(
@@ -669,23 +687,24 @@ class TransferDemoEnv(gym.Env):
         return np.array(obs)
 
     def reset(self) -> np.ndarray:
+
         # reset hand and gripper
         self.transfer_gripper(self.start_idx)
+        step_sim(500)
         if self.ghost_hand:
             self.replay_hand(self.start_idx)
 
         # reset object
         obj_pos = self.demo_data["object"]["params"]["transl"][self.start_idx]
-        rand_offset = np.random.uniform(-0.0, 0.0, 3)
-        # rand_offset = np.random.uniform(-0.03, 0.03, 3)
+        # rand_offset = np.random.uniform(-0.0, 0.0, 3)
+        rand_offset = np.random.uniform(-0.03, -0.03, 3)
         rand_offset[2] = 0
-        obj_pos += rand_offset
         obj_orn = self.demo_data["object"]["params"]["global_orient"][
             self.start_idx
         ]
         p.resetBasePositionAndOrientation(
             self.obj_id,
-            obj_pos,
+            obj_pos + rand_offset,
             p.getQuaternionFromEuler(obj_orn),
             physicsClientId=self._sim_cid,
         )
@@ -719,6 +738,7 @@ class TransferDemoEnv(gym.Env):
 
         # reward shaping
         obj2ee_dist = np.linalg.norm(obs[-14:-11])
+        obj2goal_dist = np.linalg.norm(obs[-8:-5])
         """
         self.exec_traj.append(obs[:3])
         traj_diff_dist = [
@@ -727,7 +747,7 @@ class TransferDemoEnv(gym.Env):
         ]
         traj_diff_dist = sum(traj_diff_dist) / len(traj_diff_dist)
         """
-        reward = -(obj2ee_dist)  # + (-traj_diff_dist)
+        reward = -(obj2ee_dist) + (-obj2goal_dist)  # + (-traj_diff_dist)
         self.ep_rewards.append(reward)
 
         # check termination
