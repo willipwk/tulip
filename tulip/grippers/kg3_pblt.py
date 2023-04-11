@@ -38,9 +38,27 @@ class KG3:
 
         self._pid = p.loadURDF(
             fileName=self._urdf_file,
-            basePosition=self._base_pos,
-            baseOrientation=self._base_orn,
-            useFixedBase=True,  # to update with mobile base
+            useFixedBase=False,
+            physicsClientId=self._sim_cid,
+        )
+
+        self._constraint = p.createConstraint(
+            parentBodyUniqueId=self._pid,
+            parentLinkIndex=-1,
+            childBodyUniqueId=-1,
+            childLinkIndex=-1,
+            jointType=p.JOINT_FIXED,
+            jointAxis=[0, 0, 0],
+            parentFramePosition=[0, 0, 0],
+            childFramePosition=[0.0, 0.0, 0.0],
+            childFrameOrientation=[0.0, 0.0, 0.0],
+            physicsClientId=self._sim_cid,
+        )
+        p.changeDynamics(
+            bodyUniqueId=self._pid,
+            linkIndex=-1,
+            linearDamping=10.0,
+            angularDamping=10.0,
             physicsClientId=self._sim_cid,
         )
 
@@ -77,6 +95,7 @@ class KG3:
         self._home_pos = home_pos
 
         logging.info("Setting gripper to home position:", self._home_pos)
+        self.control_base_pose(self._base_pos, self._base_orn)
         self.set_joint_positions(self._home_pos)
         step_sim(50)
 
@@ -297,11 +316,12 @@ class KG3:
             self.controllable_joint_indices
         ), "Input size does not match with the number of controllable joints"
         p.setJointMotorControlArray(
-            bodyUniqueId=self.id,
+            bodyUniqueId=self._pid,
             jointIndices=self.controllable_joint_indices,
             controlMode=p.POSITION_CONTROL,
             targetPositions=q,
-            forces=len(self.controllable_joint_indices) * [240.0],
+            forces=len(self.controllable_joint_indices) * [2.0],
+            physicsClientId=self._sim_cid,
         )
         return
 
@@ -365,6 +385,21 @@ class KG3:
         )
         if keep_local_states:
             restore_states(self, state_id)
+
+    def control_base_pose(self, base_pos, base_orn) -> None:
+        """Control gripper base to position and orientation.
+
+        Args:
+            base_pos: gripper base position.
+            base_orn: gripper base orientation in quaternion.
+            keep_local_states: restore joint position and velocity states"""
+        p.changeConstraint(
+            self._constraint,
+            jointChildPivot=base_pos,
+            jointChildFrameOrientation=base_orn,
+            maxForce=1000.0,
+            physicsClientId=self._sim_cid,
+        )
 
     def close(self) -> None:
         """Fully close the gripper."""
