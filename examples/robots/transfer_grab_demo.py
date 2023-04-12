@@ -275,7 +275,9 @@ class TransferDemoEnv(gym.Env):
 
         obj_collision_fn = (
             ".".join(
-                f'{self.grab_dir}/{self.demo_data["object"]["object_mesh"]}'.split(
+                # f'{self.grab_dir}/{self.demo_data["object"]["object_mesh"]}'.split(
+                # f'{self.grab_dir}/{self.demo_data["object"]["object_mesh"].replace("waterbottle.ply", "mug.ply")}'.split(
+                f'{self.grab_dir}/{self.demo_data["object"]["object_mesh"].replace("waterbottle.ply", "cup.ply")}'.split(
                     "."
                 )[
                     :-1
@@ -285,14 +287,16 @@ class TransferDemoEnv(gym.Env):
         )
         create_urdf_from_mesh(
             # f'{self.grab_dir}/{self.demo_data["object"]["object_mesh"]}',
-            f'{self.grab_dir}/{self.demo_data["object"]["object_mesh"].replace("waterbottle.ply", "mug.ply")}',
+            # f'{self.grab_dir}/{self.demo_data["object"]["object_mesh"].replace("waterbottle.ply", "mug.ply")}',
+            f'{self.grab_dir}/{self.demo_data["object"]["object_mesh"].replace("waterbottle.ply", "cup.ply")}',
             "obj.urdf",
             collision_fn=obj_collision_fn,
             mass=0.02,
             mu=0.5,
-            # scale=[1.0, 1.0, 1.0],
-            scale=[0.7, 0.7, 1.0],
-            rgba=[1, 1, 0, 1],
+            scale=[1.0, 1.0, 1.0],
+            # rgba=[0, 1, 0, 1],
+            # rgba=[0, 0, 1, 1],
+            # rgba=[1, 0, 0, 1],
         )
         obj_pos = self.demo_data["object"]["params"]["transl"][step_id]
         obj_orn = self.demo_data["object"]["params"]["global_orient"][step_id]
