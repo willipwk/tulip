@@ -2,7 +2,7 @@ from distutils.core import setup
 
 from setuptools import find_packages
 
-dependencies = ["numpy==1.19", "pybullet", "scipy=1.9", "pymeshlab"]
+dependencies = ["numpy==1.19", "pybullet", "scipy==1.9", "pymeshlab", "chumpy"]
 
 dev_tools = ["ipdb"]
 

@@ -2,7 +2,7 @@ import os
 
 import pybullet as p
 import pymeshlab
-import trimesh
+#import trimesh
 
 
 def convert_to_wavefront(in_fn: str, obj_fn=None) -> str:
@@ -54,12 +54,14 @@ def convex_decompose(
         assert os.path.isfile(out_fn), "VHACD failed to generate output."
 
 
+"""
 def get_center_of_mass(filename):
     mesh = trimesh.load(filename)
     if isinstance(mesh, trimesh.Scene):
         return mesh.centroid
     else:
         return mesh.center_mass
+"""
 
 
 def create_urdf_from_mesh(
