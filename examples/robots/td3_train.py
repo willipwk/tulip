@@ -22,7 +22,7 @@ from transfer_grab_demo import TransferDemoEnv
 def parse_args():
     # fmt: off
     parser = argparse.ArgumentParser()
-    parser.add_argument("--exp-name", type=str, default="cup", #os.path.basename(__file__).rstrip(".py"),
+    parser.add_argument("--exp-name", type=str, default="waterbottle", #os.path.basename(__file__).rstrip(".py"),
         help="the name of this experiment")
     parser.add_argument("--seed", type=int, default=1,
         help="seed of the experiment")

@@ -108,6 +108,10 @@ class KG3:
         return self._num_joints
 
     @property
+    def finger_links(self) -> list:
+        return [4, 5, 7, 8, 10, 11]
+
+    @property
     def tip_links(self) -> list:
         return [6, 9, 12]
 

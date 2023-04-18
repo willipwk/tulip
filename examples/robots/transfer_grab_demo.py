@@ -275,9 +275,9 @@ class TransferDemoEnv(gym.Env):
 
         obj_collision_fn = (
             ".".join(
-                # f'{self.grab_dir}/{self.demo_data["object"]["object_mesh"]}'.split(
-                # f'{self.grab_dir}/{self.demo_data["object"]["object_mesh"].replace("waterbottle.ply", "mug.ply")}'.split(
-                f'{self.grab_dir}/{self.demo_data["object"]["object_mesh"].replace("waterbottle.ply", "cup.ply")}'.split(
+                f'{self.grab_dir}/{self.demo_data["object"]["object_mesh"]}'.split(
+                    # f'{self.grab_dir}/{self.demo_data["object"]["object_mesh"].replace("waterbottle.ply", "mug.ply")}'.split(
+                    # f'{self.grab_dir}/{self.demo_data["object"]["object_mesh"].replace("waterbottle.ply", "cup.ply")}'.split(
                     "."
                 )[
                     :-1
@@ -286,15 +286,17 @@ class TransferDemoEnv(gym.Env):
             + "_coacd.obj"
         )
         create_urdf_from_mesh(
-            # f'{self.grab_dir}/{self.demo_data["object"]["object_mesh"]}',
+            f'{self.grab_dir}/{self.demo_data["object"]["object_mesh"]}',
             # f'{self.grab_dir}/{self.demo_data["object"]["object_mesh"].replace("waterbottle.ply", "mug.ply")}',
-            f'{self.grab_dir}/{self.demo_data["object"]["object_mesh"].replace("waterbottle.ply", "cup.ply")}',
+            # f'{self.grab_dir}/{self.demo_data["object"]["object_mesh"].replace("waterbottle.ply", "cup.ply")}',
             "obj.urdf",
             collision_fn=obj_collision_fn,
             mass=0.02,
             mu=0.5,
             scale=[1.0, 1.0, 1.0],
-            # rgba=[0, 1, 0, 1],
+            # scale=[0.9, 0.9, 1.0],
+            # scale=[0.8, 0.8, 1.0],
+            rgba=[1, 1, 0, 1],
             # rgba=[0, 0, 1, 1],
             # rgba=[1, 0, 0, 1],
         )
@@ -514,6 +516,7 @@ class TransferDemoEnv(gym.Env):
                 gripper.control_base_pose(g_wrist_pos, g_wrist_orn)
                 gripper.set_joint_positions(g_q)
                 step_sim(4)
+
         return h_wrist_pos
 
     def transfer(
@@ -723,6 +726,15 @@ class TransferDemoEnv(gym.Env):
         obs = self.get_observation()
         return obs
 
+    def count_contact(self, ee, object_id) -> int:
+        count = 0
+        for link_idx in ee.finger_links:
+            contact_points = p.getContactPoints(
+                ee.id, object_id, link_idx, -1, physicsClientId=self._sim_cid
+            )
+            count += len(contact_points)
+        return count
+
     def step(self, action: np.ndarray) -> tuple:
         # step action
         self.demo_traj.append(
@@ -742,8 +754,8 @@ class TransferDemoEnv(gym.Env):
 
         # reward shaping
         obj2ee_dist = np.linalg.norm(obs[-14:-11])
-        obj2goal_dist = np.linalg.norm(obs[-8:-5])
         """
+        obj2goal_dist = np.linalg.norm(obs[-8:-5])
         self.exec_traj.append(obs[:3])
         traj_diff_dist = [
             np.linalg.norm(d_pos - e_pos)
@@ -751,7 +763,11 @@ class TransferDemoEnv(gym.Env):
         ]
         traj_diff_dist = sum(traj_diff_dist) / len(traj_diff_dist)
         """
-        reward = -(obj2ee_dist) + (-obj2goal_dist)  # + (-traj_diff_dist)
+        n_contacts = self.count_contact(
+            getattr(self, f"{self.action_side[0]}gripper"), self.obj_id
+        )
+        reward = -(obj2ee_dist)  # + (-obj2goal_dist)  # + (-traj_diff_dist)
+        reward += n_contacts
         self.ep_rewards.append(reward)
 
         # check termination
