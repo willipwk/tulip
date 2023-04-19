@@ -326,7 +326,7 @@ class TransferDemoEnv(gym.Env):
             # f'{self.grab_dir}/{self.demo_data["object"]["object_mesh"].replace("waterbottle.ply", "cup.ply")}',
             urdf_fn,
             collision_fn=obj_collision_fn,
-            mass=0.05,
+            mass=0.02,
             mu=0.5,
             scale=scale,
             rgba=rgba,
@@ -708,9 +708,9 @@ class TransferDemoEnv(gym.Env):
             obs += tip_pos + tip_orn
         for diff_pos, diff_orn in poses_diff:
             obs += diff_pos + diff_orn
+        obs += self.obj_aabb[0] + self.obj_aabb[1] + self.aabb_size
         obs += obj2ee_pos + obj2ee_orn + obj2goal_pos + obj2goal_orn
         obs += [g_q]
-        obs += self.obj_aabb[0] + self.obj_aabb[1] + self.aabb_size
         obs += [self.step_idx]
         return np.array(obs)
 
