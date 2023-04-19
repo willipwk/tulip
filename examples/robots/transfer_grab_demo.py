@@ -24,7 +24,6 @@ from tulip.utils.pblt_utils import (
 )
 from tulip.utils.transform_utils import homogeneous_transform, relative_pose
 
-
 parser = argparse.ArgumentParser(description="Grab demo  transfer argparsing")
 parser.add_argument(
     "--mano_models_dir",
@@ -333,9 +332,7 @@ class TransferDemoEnv(gym.Env):
             rgba=rgba,
         )
         obj_pos = self.demo_data["object"]["params"]["transl"][step_id]
-        obj_pos[2] = (obj_pos[2] - self.table_center[2]) * scale[
-            2
-        ] + self.table_center[2]
+        obj_pos[2] = 0.075 * scale[2] + self.table_center[2]
         obj_orn = self.demo_data["object"]["params"]["global_orient"][step_id]
         self.obj_id = p.loadURDF(
             urdf_fn,
@@ -751,7 +748,6 @@ class TransferDemoEnv(gym.Env):
             (self.obj_aabb[1][1] - self.obj_aabb[0][1]) / 0.08382568779629374,
             (self.obj_aabb[1][2] - self.obj_aabb[0][2]) / 0.1492939400276554,
         ]
-
         # reset step
         self.episode_idx += 1
         self.ep_rewards = []
