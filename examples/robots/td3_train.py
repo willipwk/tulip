@@ -14,6 +14,7 @@ import torch.nn.functional as F
 import torch.optim as optim
 from stable_baselines3.common.buffers import ReplayBuffer
 from torch.utils.tensorboard import SummaryWriter
+from tulip.utils.io_utils import stdout_redirected
 from tulip.utils.pblt_utils import init_sim
 
 from transfer_grab_demo import TransferDemoEnv
@@ -262,9 +263,16 @@ if __name__ == "__main__":
         else:
             with torch.no_grad():
                 actions = actor(torch.Tensor(obs).to(device))
-                actions += torch.normal(
-                    0, actor.action_scale * args.exploration_noise
-                )
+
+                obj2ee_dist = np.linalg.norm(obs[..., -14:-11], axis=-1)
+                if (obj2ee_dist <= 0.04) and (
+                    np.random.uniform(0, 1) < (20000 - global_step) * 0.00005
+                ):
+                    actions[..., -1].fill_(0.5)
+                elif global_step < 40000:
+                    actions += torch.normal(
+                        0, actor.action_scale * args.exploration_noise
+                    )
                 actions = (
                     actions.cpu()
                     .numpy()
@@ -273,9 +281,9 @@ if __name__ == "__main__":
                         envs.single_action_space.high,
                     )
                 )
-
         # TRY NOT TO MODIFY: execute the game and log data.
-        next_obs, rewards, dones, infos = envs.step(actions)
+        with stdout_redirected():
+            next_obs, rewards, dones, infos = envs.step(actions)
 
         # TRY NOT TO MODIFY: record rewards for plotting purposes
         for info in infos:
@@ -408,7 +416,7 @@ if __name__ == "__main__":
                     int(global_step / (time.time() - start_time)),
                     global_step,
                 )
-            if global_step % 20000 == 0:
+            if global_step % 10000 == 0:
                 torch.save(
                     {
                         "actor": actor.state_dict(),
