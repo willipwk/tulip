@@ -22,7 +22,7 @@ from transfer_grab_demo import TransferDemoEnv
 def parse_args():
     # fmt: off
     parser = argparse.ArgumentParser()
-    parser.add_argument("--exp-name", type=str, default="waterbottle", #os.path.basename(__file__).rstrip(".py"),
+    parser.add_argument("--exp-name", type=str, default="randomized_waterbottle", #os.path.basename(__file__).rstrip(".py"),
         help="the name of this experiment")
     parser.add_argument("--seed", type=int, default=1,
         help="seed of the experiment")
@@ -58,7 +58,7 @@ def parse_args():
         help="the scale of policy noise")
     parser.add_argument("--exploration-noise", type=float, default=0.1,
         help="the scale of exploration noise")
-    parser.add_argument("--learning-starts", type=int, default=1e4,
+    parser.add_argument("--learning-starts", type=int, default=5e3,
         help="timestep to start learning")
     parser.add_argument("--policy-frequency", type=int, default=2,
         help="the frequency of training policy (delayed)")
@@ -104,6 +104,8 @@ def make_env(args, sim_cid):
             args.demo_npz_fn,
             disable_left=args.disable_left,
             disable_right=args.disable_right,
+            init_hands=False,
+            init_grippers=False,
         )
         env.init_rl_env(
             args.start_idx, args.end_idx, args.every_n_frame, args.ghost_hand
@@ -172,6 +174,7 @@ if __name__ == "__main__":
     args = parse_args()
     sim_cid = init_sim(mode=args.sim_mode)
     run_name = f"{sim_cid}__{args.exp_name}__{args.seed}__{int(time.time())}"
+    os.system(f"mkdir -p checkpoint/{run_name}")
     if args.track:
         import wandb
 
@@ -404,6 +407,20 @@ if __name__ == "__main__":
                     "charts/SPS",
                     int(global_step / (time.time() - start_time)),
                     global_step,
+                )
+            if global_step % 20000 == 0:
+                torch.save(
+                    {
+                        "actor": actor.state_dict(),
+                        "target_actor": target_actor.state_dict(),
+                        "qf1": qf1.state_dict(),
+                        "qf2": qf2.state_dict(),
+                        "qf1_target": qf1_target.state_dict(),
+                        "qf2_target": qf2_target.state_dict(),
+                        "actor_optimizer": actor_optimizer.state_dict(),
+                        "q_optimizer": q_optimizer.state_dict(),
+                    },
+                    f"checkpoint/{run_name}/model_{global_step}.pt",
                 )
 
     envs.close()

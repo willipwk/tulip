@@ -2,7 +2,7 @@ import os
 
 import pybullet as p
 import pymeshlab
-#import trimesh
+import trimesh
 
 
 def convert_to_wavefront(in_fn: str, obj_fn=None) -> str:
@@ -28,7 +28,7 @@ def convex_decompose(
     obj_fn: str,
     out_fn: str = None,
     suffix: str = "collision",
-    coacd_exec: str = None,
+    coacd_exec: str = None,  # "/home/zyuwei/Projects/CoACD/build/main",
 ) -> None:
     """Convex decomposition for input mesh.
 
@@ -54,14 +54,12 @@ def convex_decompose(
         assert os.path.isfile(out_fn), "VHACD failed to generate output."
 
 
-"""
 def get_center_of_mass(filename):
     mesh = trimesh.load(filename)
     if isinstance(mesh, trimesh.Scene):
         return mesh.centroid
     else:
         return mesh.center_mass
-"""
 
 
 def create_urdf_from_mesh(
@@ -136,9 +134,9 @@ def create_urdf_from_mesh(
                 rgba[3],
                 collision_fn,
                 mu,
-                com[0],
-                com[1],
-                com[2],
+                com[0] * scale[0],
+                com[1] * scale[1],
+                com[2] * scale[2],
             )
         )
     return

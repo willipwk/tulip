@@ -3,6 +3,7 @@ import inspect
 import os
 import sys
 import time
+import uuid
 
 import gym
 import numpy as np
@@ -22,6 +23,7 @@ from tulip.utils.pblt_utils import (
     vis_frame,
 )
 from tulip.utils.transform_utils import homogeneous_transform, relative_pose
+
 
 parser = argparse.ArgumentParser(description="Grab demo  transfer argparsing")
 parser.add_argument(
@@ -123,6 +125,8 @@ class TransferDemoEnv(gym.Env):
         gripper_type: str = "kg3",
         disable_left: bool = False,
         disable_right: bool = False,
+        init_hands: bool = True,
+        init_grippers: bool = True,
     ):
         """Initialize a pybullet simulation containing two hands for grab demo.
 
@@ -138,65 +142,86 @@ class TransferDemoEnv(gym.Env):
 
         self._sim_cid = sim_cid
 
+        self.models_dir = models_dir
         self.grab_dir = grab_dir
         self.demo_data = self.parse_demo(demo_npz_fn)
         self.demo_len = self.demo_data["object"]["params"]["transl"].shape[0]
 
-        self.init_hands(models_dir)
-        self.init_grippers(gripper=gripper_type)
-        self.vis_pose(lh=True, rh=True, lg=True, rg=True)
-
-        disable_collisions_between_objects(
-            self.lhand._pid, self.lgripper._pid, self._sim_cid
-        )
-        disable_collisions_between_objects(
-            self.lhand._pid, self.rgripper._pid, self._sim_cid
-        )
-        disable_collisions_between_objects(
-            self.rhand._pid, self.lgripper._pid, self._sim_cid
-        )
-        disable_collisions_between_objects(
-            self.rhand._pid, self.rgripper._pid, self._sim_cid
-        )
-
+        self.gripper_type = gripper_type
         self.controllable_sides = []
         if not disable_left:
             self.controllable_sides.append("left")
         if not disable_right:
             self.controllable_sides.append("right")
 
+        if init_hands:
+            self.init_hands(models_dir)
+        if init_grippers:
+            self.init_grippers(gripper=gripper_type)
+        if init_hands and init_grippers:
+            self.vis_pose(lh=True, rh=True, lg=True, rg=True)
+
+            disable_collisions_between_objects(
+                self.lhand._pid, self.lgripper._pid, self._sim_cid
+            )
+            disable_collisions_between_objects(
+                self.lhand._pid, self.rgripper._pid, self._sim_cid
+            )
+            disable_collisions_between_objects(
+                self.rhand._pid, self.lgripper._pid, self._sim_cid
+            )
+            disable_collisions_between_objects(
+                self.rhand._pid, self.rgripper._pid, self._sim_cid
+            )
+
     def seed(self, seed):
         np.random.seed(seed)
 
-    def init_hands(self, models_dir: str) -> None:
+    def init_hands(self, models_dir: str, sim_step=500) -> None:
+        """
         self.lhand_model = HandModel45(True, models_dir)
         self.lhand = HandBody(self._sim_cid, self.lhand_model)
-        self.lhand.set_target([0.5, 0, 1.0], [0, 0, 0, 1])
-        step_sim(500)
+        if sim_step > 0:
+            self.lhand.set_target([0.5, 0, 1.0], [0, 0, 0, 1])
+            step_sim(sim_step)
+        """
         self.rhand_model = HandModel45(False, models_dir)
         self.rhand = HandBody(self._sim_cid, self.rhand_model)
-        self.rhand.set_target([-0.5, 0, 1.0], [0, 0, 0, 1])
-        step_sim(500)
+        if sim_step > 0:
+            self.rhand.set_target([-0.5, 0, 1.0], [0, 0, 0, 1])
+            step_sim(sim_step)
 
-    def init_grippers(self, gripper: str) -> None:
+    def init_grippers(self, gripper: str, sim_step=500) -> None:
         if gripper == "kg3":
             urdf_dir = inspect.getfile(tulip).replace(
                 "tulip/__init__.py", "data/urdf/movo"
             )
+            """
             self.lgripper = KG3(
                 self._sim_cid,
                 urdf_file=f"{urdf_dir}/left_kg3.urdf",
                 base_pos=[0.15, 0, 1.0],
                 base_orn=[0, 0, 0, 1],
             )
-            step_sim(500)
+            if sim_step > 0:
+                self.lgripper.control_base_pose(
+                    self.lgripper._base_pos, self.lgripper._base_orn
+                )
+                self.lgripper.set_joint_positions(self.lgripper._home_pos)
+                step_sim(sim_step)
+            """
             self.rgripper = KG3(
                 self._sim_cid,
                 urdf_file=f"{urdf_dir}/right_kg3.urdf",
                 base_pos=[-0.15, 0, 1.0],
                 base_orn=[0, 0, 0, 1],
             )
-            step_sim(500)
+            if sim_step > 0:
+                self.rgripper.control_base_pose(
+                    self.rgripper._base_pos, self.rgripper._base_orn
+                )
+                self.rgripper.set_joint_positions(self.rgripper._home_pos)
+                step_sim(sim_step)
         else:
             print("Gripper type not supported.")
 
@@ -233,7 +258,10 @@ class TransferDemoEnv(gym.Env):
         demo_data = {k: demo_data[k].item() for k in demo_data.files}
         return demo_data
 
-    def init_scene(self, step_id: int = None) -> None:
+    def init_scene(
+        self,
+        step_id: int = None,
+    ) -> None:
         if step_id is None:
             step_id = 0
 
@@ -270,9 +298,16 @@ class TransferDemoEnv(gym.Env):
         )
         table_pos, _ = p.getBasePositionAndOrientation(self.table_id)
         self.table_center = table_pos
-        step_sim()
         os.system("rm table.urdf")
 
+    def init_object(
+        self,
+        step_id: int = None,
+        scale: list = [1.0, 1.0, 1.0],
+        rgba: list = [1.0, 1.0, 0.0, 1.0],
+        pos_offset: np.ndarray = [0.0, 0.0, 0.0],
+        rpy_offset: np.ndarray = [0.0, 0.0, 0.0],
+    ) -> None:
         obj_collision_fn = (
             ".".join(
                 f'{self.grab_dir}/{self.demo_data["object"]["object_mesh"]}'.split(
@@ -285,46 +320,34 @@ class TransferDemoEnv(gym.Env):
             )
             + "_coacd.obj"
         )
+        urdf_fn = f"{uuid.uuid4()}.urdf"
         create_urdf_from_mesh(
             f'{self.grab_dir}/{self.demo_data["object"]["object_mesh"]}',
             # f'{self.grab_dir}/{self.demo_data["object"]["object_mesh"].replace("waterbottle.ply", "mug.ply")}',
             # f'{self.grab_dir}/{self.demo_data["object"]["object_mesh"].replace("waterbottle.ply", "cup.ply")}',
-            "obj.urdf",
+            urdf_fn,
             collision_fn=obj_collision_fn,
-            mass=0.02,
+            mass=0.05,
             mu=0.5,
-            scale=[1.0, 1.0, 1.0],
-            # scale=[0.9, 0.9, 1.0],
-            # scale=[0.8, 0.8, 1.0],
-            rgba=[1, 1, 0, 1],
-            # rgba=[0, 0, 1, 1],
-            # rgba=[1, 0, 0, 1],
+            scale=scale,
+            rgba=rgba,
         )
         obj_pos = self.demo_data["object"]["params"]["transl"][step_id]
+        obj_pos[2] = (obj_pos[2] - self.table_center[2]) * scale[
+            2
+        ] + self.table_center[2]
         obj_orn = self.demo_data["object"]["params"]["global_orient"][step_id]
         self.obj_id = p.loadURDF(
-            "obj.urdf",
-            obj_pos,
-            p.getQuaternionFromEuler(obj_orn),
+            urdf_fn,
+            obj_pos + pos_offset,
+            p.getQuaternionFromEuler(obj_orn + rpy_offset),
             # globalScaling=0.8,
             physicsClientId=self._sim_cid,
         )
-        p.changeDynamics(
-            self.table_id, -1, lateralFriction=1, physicsClientId=self._sim_cid
-        )
-        p.changeDynamics(
-            self.obj_id, -1, lateralFriction=1, physicsClientId=self._sim_cid
-        )
-        for gripper in [self.lgripper, self.rgripper]:
-            for link_id in gripper.tip_links:
-                p.changeDynamics(
-                    gripper.id,
-                    -1,
-                    lateralFriction=1,
-                    physicsClientId=self._sim_cid,
-                )
-        step_sim()
-        os.system("rm obj.urdf")
+        step_sim(20)
+        self.obj_aabb = p.getAABB(self.obj_id, physicsClientId=self._sim_cid)
+        self.obj_aabb = [list(aabb) for aabb in self.obj_aabb]
+        os.system(f"rm {urdf_fn}")
 
     def replay_hand(
         self,
@@ -400,6 +423,7 @@ class TransferDemoEnv(gym.Env):
         for step_id in tqdm(range(start_idx, end_idx, every_n_frame)):
             if step_id == start_idx:
                 self.init_scene(step_id)
+                self.init_object(step_id)
                 if replay_object:
                     disable_collisions(self.lhand._pid, self._sim_cid)
                     disable_collisions(self.rhand._pid, self._sim_cid)
@@ -574,8 +598,8 @@ class TransferDemoEnv(gym.Env):
         self.start_idx = start_idx
         self.end_idx = end_idx
         self.every_n_frame = every_n_frame
-        self.init_scene(self.start_idx)
 
+        self.state_id = None
         # setup target goal
         self.obj_goal_pos = self.demo_data["object"]["params"]["transl"][
             self.end_idx
@@ -585,13 +609,11 @@ class TransferDemoEnv(gym.Env):
         ]
 
         # ignore necessary collisions
-        self.ghost_hand = ghost_hand
-        disable_collisions(self.lhand._pid, self._sim_cid)
-        disable_collisions(self.rhand._pid, self._sim_cid)
+        self.ghost_hand = False
 
         # setup observation and action space
         self._observation_space = gym.spaces.Box(
-            -np.inf, np.inf, shape=(62,), dtype="float32"
+            -np.inf, np.inf, shape=(71,), dtype="float32"
         )  # base_pose, tip_pose * 3, keyframe_pose_diff * 4,  obj2ee_pose, q, t
         self._action_space = gym.spaces.Box(
             -1, 1, shape=(7,), dtype="float32"
@@ -690,31 +712,45 @@ class TransferDemoEnv(gym.Env):
         for diff_pos, diff_orn in poses_diff:
             obs += diff_pos + diff_orn
         obs += obj2ee_pos + obj2ee_orn + obj2goal_pos + obj2goal_orn
-        obs += [g_q] + [self.step_idx]
+        obs += [g_q]
+        obs += self.obj_aabb[0] + self.obj_aabb[1] + self.aabb_size
+        obs += [self.step_idx]
         return np.array(obs)
 
     def reset(self) -> np.ndarray:
 
-        # reset hand and gripper
-        self.transfer_gripper(self.start_idx)
-        step_sim(500)
-        if self.ghost_hand:
-            self.replay_hand(self.start_idx)
+        p.resetSimulation(physicsClientId=self._sim_cid)
+        p.setTimeStep(1 / 240.0, physicsClientId=self._sim_cid)
+        p.setGravity(0, 0, -9.8, physicsClientId=self._sim_cid)
 
-        # reset object
-        obj_pos = self.demo_data["object"]["params"]["transl"][self.start_idx]
-        # rand_offset = np.random.uniform(-0.0, 0.0, 3)
-        rand_offset = np.random.uniform(-0.03, -0.03, 3)
-        rand_offset[2] = 0
-        obj_orn = self.demo_data["object"]["params"]["global_orient"][
-            self.start_idx
-        ]
-        p.resetBasePositionAndOrientation(
-            self.obj_id,
-            obj_pos + rand_offset,
-            p.getQuaternionFromEuler(obj_orn),
-            physicsClientId=self._sim_cid,
+        sim_step = 500
+        self.init_hands(self.models_dir, sim_step=sim_step)
+        self.init_grippers(self.gripper_type, sim_step=sim_step)
+        self.init_scene(self.start_idx)
+        self.transfer_gripper(self.start_idx)
+        step_sim(sim_step)
+
+        # init object
+        x_scale = np.random.uniform(low=0.6, high=1.2)
+        y_scale = x_scale + np.random.uniform(low=-0.1, high=0.1)
+        z_scale = np.random.uniform(low=0.7, high=1.3)
+        scale = [x_scale, y_scale, z_scale]
+        rgba = np.random.uniform(low=0, high=1, size=3).tolist() + [1.0]
+        # pos_offset = np.random.uniform(-0.03, 0.03, 3)
+        pos_offset = np.random.uniform(0.0, 0.0, 3)
+        rpy_offset = np.array([0.0, 0.0, np.random.uniform(-np.pi, np.pi)])
+        self.init_object(
+            step_id=self.start_idx,
+            scale=scale,
+            rgba=rgba,
+            pos_offset=pos_offset,
+            rpy_offset=rpy_offset,
         )
+        self.aabb_size = [
+            (self.obj_aabb[1][0] - self.obj_aabb[0][0]) / 0.07991508751230986,
+            (self.obj_aabb[1][1] - self.obj_aabb[0][1]) / 0.08382568779629374,
+            (self.obj_aabb[1][2] - self.obj_aabb[0][2]) / 0.1492939400276554,
+        ]
 
         # reset step
         self.episode_idx += 1
@@ -767,7 +803,7 @@ class TransferDemoEnv(gym.Env):
             getattr(self, f"{self.action_side[0]}gripper"), self.obj_id
         )
         reward = -(obj2ee_dist)  # + (-obj2goal_dist)  # + (-traj_diff_dist)
-        reward += n_contacts
+        reward += n_contacts / 10.0
         self.ep_rewards.append(reward)
 
         # check termination

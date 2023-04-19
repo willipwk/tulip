@@ -3,12 +3,13 @@ import os
 import time
 
 import numpy as np
-
-from transfer_grab_demo import TransferDemoEnv
 from tulip.utils.pblt_utils import init_sim
 
+from transfer_grab_demo import TransferDemoEnv
+
 parser = argparse.ArgumentParser(description="RL for demo transferring")
-parser.add_argument( "--mano_models_dir",
+parser.add_argument(
+    "--mano_models_dir",
     dest="models_dir",
     type=str,
     default="/home/zyuwei/Projects/tulip/data/mano_v1_2/models/",
@@ -76,16 +77,16 @@ def init_env(args):
         args.demo_npz_fn,
         disable_left=args.disable_left,
         disable_right=args.disable_right,
+        init_hands=False,
+        init_grippers=False,
     )
-    env.init_rl_env(args.start_idx,
-                    args.end_idx,
-                    args.every_n_frame,
-                    args.ghost_hand)
+    env.init_rl_env(
+        args.start_idx, args.end_idx, args.every_n_frame, args.ghost_hand
+    )
     return env
 
 
 class RandomPolicy:
-
     def __init__(self, action_space):
         self.action_space = action_space
 

@@ -94,10 +94,10 @@ class KG3:
         self._open_pos = np.array([0.0, 0.0, 0.0])
         self._home_pos = home_pos
 
-        logging.info("Setting gripper to home position:", self._home_pos)
-        self.control_base_pose(self._base_pos, self._base_orn)
-        self.set_joint_positions(self._home_pos)
-        step_sim(50)
+        # logging.info("Setting gripper to home position:", self._home_pos)
+        # self.control_base_pose(self._base_pos, self._base_orn)
+        # self.set_joint_positions(self._home_pos)
+        # step_sim(50)
 
     @property
     def id(self) -> int:
