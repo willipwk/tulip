@@ -14,7 +14,6 @@ import torch.nn.functional as F
 import torch.optim as optim
 from stable_baselines3.common.buffers import ReplayBuffer
 from torch.utils.tensorboard import SummaryWriter
-from tulip.utils.io_utils import stdout_redirected
 from tulip.utils.pblt_utils import init_sim
 
 from transfer_grab_demo import TransferDemoEnv
@@ -282,8 +281,7 @@ if __name__ == "__main__":
                     )
                 )
         # TRY NOT TO MODIFY: execute the game and log data.
-        with stdout_redirected():
-            next_obs, rewards, dones, infos = envs.step(actions)
+        next_obs, rewards, dones, infos = envs.step(actions)
 
         # TRY NOT TO MODIFY: record rewards for plotting purposes
         for info in infos:
