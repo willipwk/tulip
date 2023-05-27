@@ -16,10 +16,13 @@ def read_vertices(fn):
     with open(fn, "r") as fp:
         lines = [line.strip().split() for line in fp.readlines()]
     for line in lines:
+        if len(line) != 4:
+            continue
         if line[0] == "v":
             vertices.append(
                 np.array(
-                    [float(line[1]), float(line[2]), float(line[3])], np.float32
+                    [float(line[1]), float(line[2]), float(line[3])],
+                    np.float32,
                 )
             )
     return np.array(vertices)

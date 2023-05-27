@@ -75,6 +75,7 @@ def depth2xyz(
     cy: float,
     cam_pos: np.ndarray,
     cam_quat: np.ndarray,
+    mask: np.ndarray = None,
     return_pcd: bool = False,
 ) -> np.ndarray:
     """Convert depth image to point array or xyz image.
@@ -106,6 +107,9 @@ def depth2xyz(
     pcd = np.matmul(cam_pose, uvz_vec)[:3].transpose()
     xyz_image = pcd.reshape(h, w, 3)
     if return_pcd:
+        if mask is not None:
+            mask = mask.reshape(-1)
+            pcd = [p for p, m in zip(pcd, mask) if m]
         return np.array(pcd)
     else:
         return xyz_image

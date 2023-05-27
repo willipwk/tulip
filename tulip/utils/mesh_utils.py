@@ -1,8 +1,9 @@
 import os
 
-import pybullet as p
 import pymeshlab
 import trimesh
+
+import pybullet as p
 
 
 def convert_to_wavefront(in_fn: str, obj_fn=None) -> str:
@@ -16,11 +17,12 @@ def convert_to_wavefront(in_fn: str, obj_fn=None) -> str:
         obj_fn: generated obj filename.
     """
     assert os.path.isfile(in_fn), f"Input {in_fn} does not exist."
-    ms = pymeshlab.MeshSet()
-    ms.load_new_mesh(in_fn)
     if obj_fn is None:
         obj_fn = ".".join(in_fn.split(".")[:-1]) + ".obj"
-    ms.save_current_mesh(obj_fn)
+    if not os.path.isfile(obj_fn):
+        ms = pymeshlab.MeshSet()
+        ms.load_new_mesh(in_fn)
+        ms.save_current_mesh(obj_fn)
     return obj_fn
 
 
@@ -44,14 +46,15 @@ def convex_decompose(
     ), "Convex decomposition only supports wavefront .obj format."
     if out_fn is None:
         out_fn = obj_fn.replace(".obj", f"_{suffix}.obj")
-    if coacd_exec is not None:
-        assert os.path.isfile(coacd_exec), "CoACD executable not found."
-        os.system(f"{coacd_exec} -i {obj_fn} -o {out_fn}")
-        assert os.path.isfile(out_fn), "CoACD failed to generate output."
-    else:  # use vhacd
-        p.vhacd(obj_fn, out_fn, "log.txt", alpha=0.04, resolution=50000)
-        os.system("rm log.txt")
-        assert os.path.isfile(out_fn), "VHACD failed to generate output."
+    if not os.path.isfile(out_fn):
+        if coacd_exec is not None:
+            assert os.path.isfile(coacd_exec), "CoACD executable not found."
+            os.system(f"{coacd_exec} -i {obj_fn} -o {out_fn}")
+            assert os.path.isfile(out_fn), "CoACD failed to generate output."
+        else:  # use vhacd
+            p.vhacd(obj_fn, out_fn, "log.txt", alpha=0.04, resolution=50000)
+            os.system("rm log.txt")
+            assert os.path.isfile(out_fn), "VHACD failed to generate output."
 
 
 def get_center_of_mass(filename):
