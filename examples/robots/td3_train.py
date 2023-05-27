@@ -14,15 +14,15 @@ import torch.nn.functional as F
 import torch.optim as optim
 from stable_baselines3.common.buffers import ReplayBuffer
 from torch.utils.tensorboard import SummaryWriter
-from tulip.utils.pblt_utils import init_sim
 
 from transfer_grab_demo import TransferDemoEnv
+from tulip.utils.pblt_utils import init_sim
 
 
 def parse_args():
     # fmt: off
     parser = argparse.ArgumentParser()
-    parser.add_argument("--exp-name", type=str, default="randomized_waterbottle", #os.path.basename(__file__).rstrip(".py"),
+    parser.add_argument("--exp-name", type=str, default="demo_no_contact_reward", #os.path.basename(__file__).rstrip(".py"),
         help="the name of this experiment")
     parser.add_argument("--seed", type=int, default=1,
         help="seed of the experiment")
@@ -58,7 +58,7 @@ def parse_args():
         help="the scale of policy noise")
     parser.add_argument("--exploration-noise", type=float, default=0.1,
         help="the scale of exploration noise")
-    parser.add_argument("--learning-starts", type=int, default=5e3,
+    parser.add_argument("--learning-starts", type=int, default=1e3,
         help="timestep to start learning")
     parser.add_argument("--policy-frequency", type=int, default=2,
         help="the frequency of training policy (delayed)")
@@ -213,6 +213,12 @@ if __name__ == "__main__":
     ), "only continuous action space is supported"
 
     actor = Actor(envs).to(device)
+    """
+    ckpt = torch.load(
+        "checkpoint/0__randomized_waterbottle__1__1681899787/model_280000.pt",
+        map_location=device)
+    actor.load_state_dict(ckpt['actor'])
+    """
     qf1 = QNetwork(envs).to(device)
     qf2 = QNetwork(envs).to(device)
     qf1_target = QNetwork(envs).to(device)
@@ -242,7 +248,7 @@ if __name__ == "__main__":
     obs = envs.reset()
     for global_step in range(args.total_timesteps):
         # ALGO LOGIC: put action logic here
-        if global_step < args.learning_starts:
+        if (global_step < args.learning_starts):
             actions = np.array(
                 [
                     envs.single_action_space.sample()
@@ -262,16 +268,17 @@ if __name__ == "__main__":
         else:
             with torch.no_grad():
                 actions = actor(torch.Tensor(obs).to(device))
-
+                """
                 obj2ee_dist = np.linalg.norm(obs[..., -14:-11], axis=-1)
                 if (obj2ee_dist <= 0.04) and (
                     np.random.uniform(0, 1) < (20000 - global_step) * 0.00005
                 ):
                     actions[..., -1].fill_(0.5)
                 elif global_step < 40000:
-                    actions += torch.normal(
-                        0, actor.action_scale * args.exploration_noise
-                    )
+                """
+                actions += torch.normal(
+                    0, actor.action_scale * args.exploration_noise
+                )
                 actions = (
                     actions.cpu()
                     .numpy()

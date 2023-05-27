@@ -37,7 +37,7 @@ parser.add_argument(
     "--checkpoint",
     dest="ckpt",
     type=str,
-    default="checkpoint/0__randomized_waterbottle__1__1681899787/model_280000.pt",
+    default="checkpoint/0__randomized_multi_objects_v2__1__1681963961/model_170000.pt",
     help="model checkpoint",
 )
 parser.add_argument(
@@ -120,9 +120,7 @@ class RandomPolicy:
 class Actor(nn.Module):
     def __init__(self, env):
         super().__init__()
-        self.fc1 = nn.Linear(
-            np.array(env.observation_space.shape).prod(), 256
-        )
+        self.fc1 = nn.Linear(np.array(env.observation_space.shape).prod(), 256)
         self.fc2 = nn.Linear(256, 256)
         self.fc_mu = nn.Linear(256, np.prod(env.action_space.shape))
         # action rescaling
@@ -148,7 +146,6 @@ class Actor(nn.Module):
         return x * self.action_scale + self.action_bias
 
 
-
 if __name__ == "__main__":
 
     sim_cid = init_sim(mode=args.sim_mode)
@@ -168,15 +165,19 @@ if __name__ == "__main__":
     )
     actor = Actor(env).to(device)
     ckpt = torch.load(args.ckpt, map_location=device)
-    actor.load_state_dict(ckpt['actor'])
+    actor.load_state_dict(ckpt["actor"])
 
     done = False
     next_obs = env.reset()
-    for _ in range(1000):
+    for _ in range(2000):
         obs = next_obs
-        #action = random_policy(obs)
+        # action = random_policy(obs)
         with torch.no_grad():
             action = actor(torch.Tensor(obs).to(device))
+            action.fill_(0)
+            obj2ee_dist = np.linalg.norm(obs[..., -14:-11], axis=-1)
+            if obj2ee_dist <= 0.04:
+                action[..., -1].fill_(1)
             action = action.squeeze(0).cpu().numpy()
         next_obs, reward, done, _ = env.step(action)
         time.sleep(0.2)

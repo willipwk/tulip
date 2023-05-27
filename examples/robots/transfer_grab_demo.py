@@ -7,21 +7,18 @@ import uuid
 
 import gym
 import numpy as np
-import pybullet as p
 import pybullet_data
-import tulip
 from scipy.spatial.transform import Rotation as R
 from tqdm import tqdm
+
+import pybullet as p
+import tulip
 from tulip.grippers.kg3_pblt import KG3
 from tulip.grippers.mano_pblt import HandBody, HandModel45
 from tulip.utils.mesh_utils import create_urdf_from_mesh
-from tulip.utils.pblt_utils import (
-    disable_collisions,
-    disable_collisions_between_objects,
-    init_sim,
-    step_sim,
-    vis_frame,
-)
+from tulip.utils.pblt_utils import (disable_collisions,
+                                    disable_collisions_between_objects,
+                                    init_sim, step_sim, vis_frame)
 from tulip.utils.transform_utils import homogeneous_transform, relative_pose
 
 parser = argparse.ArgumentParser(description="Grab demo  transfer argparsing")
@@ -302,28 +299,20 @@ class TransferDemoEnv(gym.Env):
     def init_object(
         self,
         step_id: int = None,
+        obj_fn: str = None,
         scale: list = [1.0, 1.0, 1.0],
         rgba: list = [1.0, 1.0, 0.0, 1.0],
         pos_offset: np.ndarray = [0.0, 0.0, 0.0],
         rpy_offset: np.ndarray = [0.0, 0.0, 0.0],
     ) -> None:
-        obj_collision_fn = (
-            ".".join(
-                f'{self.grab_dir}/{self.demo_data["object"]["object_mesh"]}'.split(
-                    # f'{self.grab_dir}/{self.demo_data["object"]["object_mesh"].replace("waterbottle.ply", "mug.ply")}'.split(
-                    # f'{self.grab_dir}/{self.demo_data["object"]["object_mesh"].replace("waterbottle.ply", "cup.ply")}'.split(
-                    "."
-                )[
-                    :-1
-                ]
+        if obj_fn is None:
+            obj_fn = (
+                f'{self.grab_dir}/{self.demo_data["object"]["object_mesh"]}'
             )
-            + "_coacd.obj"
-        )
         urdf_fn = f"{uuid.uuid4()}.urdf"
+        obj_collision_fn = ".".join(obj_fn.split(".")[:-1]) + "_coacd.obj"
         create_urdf_from_mesh(
-            f'{self.grab_dir}/{self.demo_data["object"]["object_mesh"]}',
-            # f'{self.grab_dir}/{self.demo_data["object"]["object_mesh"].replace("waterbottle.ply", "mug.ply")}',
-            # f'{self.grab_dir}/{self.demo_data["object"]["object_mesh"].replace("waterbottle.ply", "cup.ply")}',
+            obj_fn,
             urdf_fn,
             collision_fn=obj_collision_fn,
             mass=0.02,
@@ -728,16 +717,26 @@ class TransferDemoEnv(gym.Env):
         step_sim(sim_step)
 
         # init object
-        x_scale = np.random.uniform(low=0.6, high=1.2)
-        y_scale = x_scale + np.random.uniform(low=-0.1, high=0.1)
-        z_scale = np.random.uniform(low=0.7, high=1.3)
+        x_scale = np.random.uniform(low=1.0, high=1.0)
+        y_scale = x_scale + np.random.uniform(low=0.0, high=0.0)
+        z_scale = np.random.uniform(low=1.0, high=1.0)
         scale = [x_scale, y_scale, z_scale]
-        rgba = np.random.uniform(low=0, high=1, size=3).tolist() + [1.0]
+        rgba = [1, 1, 0, 1] #np.random.uniform(low=0, high=1, size=3).tolist() + [1.0]
         # pos_offset = np.random.uniform(-0.03, 0.03, 3)
-        pos_offset = np.random.uniform(0.0, 0.0, 3)
+        pos_offset = np.random.uniform(0, 0, 3)
         rpy_offset = np.array([0.0, 0.0, np.random.uniform(-np.pi, np.pi)])
+        obj_fn = np.random.choice(
+            [
+                f'{self.grab_dir}/{self.demo_data["object"]["object_mesh"]}',
+                # f'{self.grab_dir}/{self.demo_data["object"]["object_mesh"].replace("waterbottle.ply", "mug.ply")}',
+                # f'{self.grab_dir}/{self.demo_data["object"]["object_mesh"].replace("waterbottle.ply", "cup.ply")}',
+                # f'{self.grab_dir}/{self.demo_data["object"]["object_mesh"].replace("waterbottle.ply", "cylindermedium.ply")}',
+                #f'{self.grab_dir}/{self.demo_data["object"]["object_mesh"].replace("waterbottle.ply", "cubemedium.ply")}',
+            ]
+        )
         self.init_object(
             step_id=self.start_idx,
+            obj_fn=obj_fn,
             scale=scale,
             rgba=rgba,
             pos_offset=pos_offset,
@@ -799,11 +798,15 @@ class TransferDemoEnv(gym.Env):
             getattr(self, f"{self.action_side[0]}gripper"), self.obj_id
         )
         reward = -(obj2ee_dist)  # + (-obj2goal_dist)  # + (-traj_diff_dist)
-        reward += n_contacts / 10.0
+        #reward += n_contacts / 10.0
         self.ep_rewards.append(reward)
 
         # check termination
         done = self.is_terminated()
+        if done:
+            print(obj2ee_dist)
+            #with open("waterbottle.txt", "a") as fp:
+            #    fp.write(f"{obj2ee_dist}\n")
 
         # update step
         self.step_idx += self.every_n_frame
